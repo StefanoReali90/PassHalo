@@ -144,6 +144,20 @@ public class BookingService {
 
         Booking booking = bookingRepository.findForCheckInByUuid(uuid).orElseThrow(() -> new BookingNotFoundException("Booking not found"));
         authEventService.checkStaffAccess(booking.getEvent().getId(), admin.getId());
+        return validateCheckIn(booking);
+    }
+
+    @Transactional
+    public CheckInResponse checkInBookingForEvent(UUID uuid, Long eventId) {
+        Booking booking = bookingRepository.findForCheckInByUuid(uuid)
+                .orElseThrow(() -> new BookingNotFoundException("Booking not found"));
+        if (!booking.getEvent().getId().equals(eventId)) {
+            throw new BookingNotFoundException("Booking not found");
+        }
+        return validateCheckIn(booking);
+    }
+
+    private CheckInResponse validateCheckIn(Booking booking) {
         if (booking.getEvent() != null && booking.getEvent().getEventState() == EventState.FINISHED) {
             throw new EventFinishedException("Event is finished and check-in is not allowed");
         }

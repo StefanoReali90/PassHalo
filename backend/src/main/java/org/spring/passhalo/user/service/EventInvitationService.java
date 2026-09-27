@@ -5,6 +5,7 @@ import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.exception.EventNotFoundException;
 import org.spring.passhalo.event.repository.EventRepository;
 import org.spring.passhalo.notification.service.EmailService;
+import org.spring.passhalo.user.dto.EventInvitationResponse;
 import org.spring.passhalo.user.entity.EventInvitation;
 import org.spring.passhalo.user.entity.EventMembership;
 import org.spring.passhalo.user.entity.User;
@@ -16,6 +17,7 @@ import org.spring.passhalo.user.exception.InvitationAlreadyExistsException;
 import org.spring.passhalo.user.repository.EventInvitationRepository;
 import org.spring.passhalo.user.repository.EventMembershipRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +46,7 @@ public class EventInvitationService {
     private final AuthEventService authEventService;
 
     @Transactional
-    public void createInvitation(Long eventId, String inviteEmail, EventRole role, User admin) throws NoSuchAlgorithmException {
+    public EventInvitationResponse createInvitation(Long eventId, String inviteEmail, EventRole role, User admin) throws NoSuchAlgorithmException {
 
         if (role == null || inviteEmail == null || inviteEmail.isBlank() || admin == null) {
             throw new InvalidInvitationException("Invalid invitation");
@@ -81,6 +83,17 @@ public class EventInvitationService {
         eventInvitation.setTokenHash(hashString);
         eventInvitationRepository.save(eventInvitation);
         emailService.sendEmailConfirmation(eventInvitation, token);
+        return toResponse(eventInvitation);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EventInvitationResponse> getPendingInvitations(Long eventId, User admin) {
+        authEventService.checkUserAccess(eventId, admin.getId());
+        LocalDateTime now = LocalDateTime.now(ZoneId.of(timeZone));
+        return eventInvitationRepository.findAllByEventIdAndInviteState(eventId, InviteState.PENDING).stream()
+                .filter(invitation -> invitation.getExpiresAt().isAfter(now))
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional
@@ -148,6 +161,7 @@ public class EventInvitationService {
     }
 
     @Transactional
+    @Scheduled(cron = "0 0 * * * *", zone = "${app.time-zone}")
     public void expireInvitations() {
         LocalDateTime now = LocalDateTime.now(ZoneId.of(timeZone));
         List<EventInvitation> expiredInvitations = eventInvitationRepository.findAllByInviteStateAndExpiresAtLessThanEqual(InviteState.PENDING, now);
@@ -167,5 +181,19 @@ public class EventInvitationService {
         invitation.setInviteState(InviteState.REVOKED);
         invitation.setRevokedAt(LocalDateTime.now(ZoneId.of(timeZone)));
         eventInvitationRepository.save(invitation);
+    }
+
+    private EventInvitationResponse toResponse(EventInvitation invitation) {
+        return new EventInvitationResponse(
+                invitation.getId(),
+                invitation.getEvent().getId(),
+                invitation.getRecipientEmail(),
+                invitation.getProposedRole(),
+                invitation.getInviteState(),
+                invitation.getCreatedAt(),
+                invitation.getExpiresAt(),
+                invitation.getAcceptedAt(),
+                invitation.getRevokedAt()
+        );
     }
 }

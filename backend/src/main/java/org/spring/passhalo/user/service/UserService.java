@@ -43,13 +43,13 @@ public class UserService {
     public UserResponse createUser(AdminRegistrationRequest request) {
         String cleanedEmail = request.email() != null ? request.email().trim().toLowerCase(Locale.ROOT) : null;
 
-        if (request.email() != null && userRepository.existsByEmail(cleanedEmail)) {
+        if (cleanedEmail != null && userRepository.existsByEmailIgnoreCase(cleanedEmail)) {
             throw new EmailAlreadyExistsException("Email already exists");
         }
         User user = new User();
         user.setName(request.name());
         user.setSurname(request.surname());
-        user.setEmail(request.email());
+        user.setEmail(cleanedEmail);
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(Role.ADMIN);
         User savedUser = userRepository.save(user);
@@ -60,14 +60,14 @@ public class UserService {
 
     @Transactional
     public UserResponse createStaffUser(StaffRegistrationRequest request) {
-        if (request.email() != null && userRepository.existsByEmail(request
-                .email())) {
+        String cleanedEmail = request.email() != null ? request.email().trim().toLowerCase(Locale.ROOT) : null;
+        if (cleanedEmail != null && userRepository.existsByEmailIgnoreCase(cleanedEmail)) {
             throw new EmailAlreadyExistsException("Email already exists");
         }
         User user = new User();
         user.setName(request.name());
         user.setSurname(request.surname());
-        user.setEmail(request.email());
+        user.setEmail(cleanedEmail);
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(Role.STAFF);
         User savedUser = userRepository.save(user);
@@ -76,7 +76,8 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserResponse getUserByEmail(String email) {
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User not found"));
+        User user = userRepository.findByEmailIgnoreCase(email.trim().toLowerCase(Locale.ROOT))
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
         return userMapper.toResponse(user);
     }
 
@@ -111,7 +112,7 @@ public class UserService {
 
     @Transactional
     public void recoverPassword(ForgotPasswordRequest request) {
-        userRepository.findByEmail(request.email()).ifPresent(user -> {
+        userRepository.findByEmailIgnoreCase(request.email().trim().toLowerCase(Locale.ROOT)).ifPresent(user -> {
             UUID resetToken = UUID.randomUUID();
             user.setResetPasswordToken(resetToken.toString());
             user.setResetPasswordTokenExpiry(LocalDateTime.now().plusMinutes(15));
@@ -150,8 +151,9 @@ public class UserService {
     }
 
     public LoginResponse login(@Valid LoginRequest request) {
-        User user = userRepository.findByEmail(request.email()).orElseThrow(() -> new UserNotFoundException("User not found"));
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        User user = userRepository.findByEmailIgnoreCase(request.email().trim().toLowerCase(Locale.ROOT))
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(user.getEmail(), request.password()));
         String token = jwtService.generateToken(user);
         return new LoginResponse(token);
     }

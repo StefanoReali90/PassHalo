@@ -15,11 +15,13 @@ import org.spring.passhalo.booking.mapper.BookingMapper;
 import org.spring.passhalo.booking.repository.BookingRepository;
 import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.enums.EventState;
+import org.spring.passhalo.event.exception.AccessDeniedException;
 import org.spring.passhalo.event.exception.EventNotFoundException;
 import org.spring.passhalo.event.repository.EventRepository;
 import org.spring.passhalo.marketing.service.MarketingService;
 import org.spring.passhalo.notification.service.EmailService;
 import org.spring.passhalo.user.entity.User;
+import org.spring.passhalo.user.service.AuthEventService;
 
 import java.util.List;
 import java.util.Optional;
@@ -54,31 +56,65 @@ public class BookingServiceTest {
     @Mock
     private MarketingService marketingService;
 
+    @Mock
+    private AuthEventService authEventService;
+
     @Test
     void testCheckIn() {
         UUID bookingId = UUID.randomUUID();
+        User user = new User();
+        user.setId(7L);
         Event event = new Event();
+        event.setId(11L);
         event.setEventState(EventState.WAITING);
         Booking booking = new Booking();
-        CheckInResponse expectedResponse = new CheckInResponse("Concerto", "Mario", "Rossi");
+        CheckInResponse expectedResponse = new CheckInResponse("Concerto");
         booking.setUuid(bookingId);
         booking.setBookingStatus(BookingStatus.CREATED);
         booking.setCheckInDateTime(null);
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(bookingId)).thenReturn(Optional.of(booking));
         when(bookingMapper.toCheckInResponse(booking)).thenReturn(expectedResponse);
-        CheckInResponse response = bookingService.checkInBooking(bookingId);
+        CheckInResponse response = bookingService.checkInBooking(bookingId,user);
         assertEquals(expectedResponse, response);
         assertNotNull(response);
+        assertEquals("Concerto", response.eventName());
         assertEquals(BookingStatus.VALIDATED, booking.getBookingStatus());
         assertNotNull(booking.getCheckInDateTime());
         verify(bookingRepository, times(1)).findForCheckInByUuid(bookingId);
+        verify(authEventService).checkStaffAccess(event.getId(), user.getId());
 
+    }
+
+    @Test
+    void checkIn_WhenAccessDenied_DoesNotValidateBooking() {
+        UUID bookingId = UUID.randomUUID();
+        User user = new User();
+        user.setId(7L);
+        Event event = new Event();
+        event.setId(11L);
+        event.setEventState(EventState.WAITING);
+        Booking booking = new Booking();
+        booking.setUuid(bookingId);
+        booking.setBookingStatus(BookingStatus.CREATED);
+        booking.setEvent(event);
+        when(bookingRepository.findForCheckInByUuid(bookingId)).thenReturn(Optional.of(booking));
+        doThrow(new AccessDeniedException("Access denied"))
+                .when(authEventService).checkStaffAccess(event.getId(), user.getId());
+
+        assertThrows(AccessDeniedException.class, () -> bookingService.checkInBooking(bookingId, user));
+
+        assertEquals(BookingStatus.CREATED, booking.getBookingStatus());
+        assertNull(booking.getCheckInDateTime());
+        verifyNoInteractions(bookingMapper);
     }
 
     @Test
     void testCheckIn_WhenAlreadyValidated_ShouldThrowException() {
         Event event = new Event();
+        User user = new User();
+        event.setId(11L);
+        user.setId(7L);
         event.setEventState(EventState.WAITING);
         UUID bookingId = UUID.randomUUID();
         Booking booking = new Booking();
@@ -86,22 +122,28 @@ public class BookingServiceTest {
         booking.setBookingStatus(BookingStatus.VALIDATED);
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(bookingId)).thenReturn(Optional.of(booking));
-        assertThrows(AlreadyValidatedException.class, () -> bookingService.checkInBooking(bookingId));
+        assertThrows(AlreadyValidatedException.class, () -> bookingService.checkInBooking(bookingId, user));
         verify(bookingRepository, times(1)).findForCheckInByUuid(bookingId);
+        verify(authEventService).checkStaffAccess(event.getId(), user.getId());
     }
 
     @Test
     void checkin_bookingNotFound_ShouldThrowException() {
         UUID uuid = UUID.randomUUID();
-        Booking booking = new Booking();
+        User user = new User();
+        user.setId(7L);
         when(bookingRepository.findForCheckInByUuid(uuid)).thenReturn(Optional.empty());
-        assertThrows(BookingNotFoundException.class, () -> bookingService.checkInBooking(uuid));
+        assertThrows(BookingNotFoundException.class, () -> bookingService.checkInBooking(uuid, user));
         verify(bookingRepository, times(1)).findForCheckInByUuid(uuid);
+        verifyNoInteractions(authEventService);
     }
 
     @Test
     void checkin_bookingCanceled_ShouldThrowException() {
         Event event = new Event();
+        User user = new User();
+        event.setId(11L);
+        user.setId(7L);
         event.setEventState(EventState.WAITING);
         UUID uuid = UUID.randomUUID();
         Booking booking = new Booking();
@@ -109,8 +151,9 @@ public class BookingServiceTest {
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(uuid)).thenReturn(Optional.of(booking));
-        assertThrows(AlreadyCanceledException.class, () -> bookingService.checkInBooking(uuid));
+        assertThrows(AlreadyCanceledException.class, () -> bookingService.checkInBooking(uuid, user));
         verify(bookingRepository, times(1)).findForCheckInByUuid(uuid);
+        verify(authEventService).checkStaffAccess(event.getId(), user.getId());
     }
 
     @Test
@@ -183,14 +226,68 @@ public class BookingServiceTest {
         User user = new User();
         user.setId(1L);
         Event event = new Event();
+        event.setId(11L);
         event.setUser(user);
         booking.setEvent(event);
         booking.setBookingStatus(BookingStatus.CREATED);
         booking.setUuid(bookingUuid);
-        when(bookingRepository.findByUuid(booking.getUuid())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findForCheckInByUuid(booking.getUuid())).thenReturn(Optional.of(booking));
         bookingService.deleteBooking(booking.getUuid(), user);
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
-        verify(bookingRepository, times(1)).findByUuid(booking.getUuid());
+        verify(bookingRepository, times(1)).findForCheckInByUuid(booking.getUuid());
+        verify(authEventService).checkUserAccess(event.getId(), user.getId());
+    }
+
+    @Test
+    void deleteBooking_WhenAccessDenied_DoesNotCancelBooking() {
+        UUID uuid = UUID.randomUUID();
+        User outsider = new User();
+        outsider.setId(7L);
+        Event event = new Event();
+        event.setId(11L);
+        Booking booking = new Booking();
+        booking.setUuid(uuid);
+        booking.setEvent(event);
+        booking.setBookingStatus(BookingStatus.CREATED);
+        when(bookingRepository.findForCheckInByUuid(uuid)).thenReturn(Optional.of(booking));
+        doThrow(new AccessDeniedException("denied"))
+                .when(authEventService).checkUserAccess(event.getId(), outsider.getId());
+
+        assertThrows(AccessDeniedException.class, () -> bookingService.deleteBooking(uuid, outsider));
+
+        assertEquals(BookingStatus.CREATED, booking.getBookingStatus());
+    }
+
+    @Test
+    void bookingDetailsAreNotMappedBeforeEventAccessCheck() {
+        UUID uuid = UUID.randomUUID();
+        User outsider = new User();
+        outsider.setId(7L);
+        Event event = new Event();
+        event.setId(11L);
+        Booking booking = new Booking();
+        booking.setUuid(uuid);
+        booking.setEvent(event);
+        when(bookingRepository.findByUuid(uuid)).thenReturn(Optional.of(booking));
+        doThrow(new AccessDeniedException("denied"))
+                .when(authEventService).checkUserAccess(event.getId(), outsider.getId());
+
+        assertThrows(AccessDeniedException.class, () -> bookingService.getBookingByUuid(uuid, outsider));
+
+        verifyNoInteractions(bookingMapper, qrCodeService);
+    }
+
+    @Test
+    void bookingSearchDoesNotReadPersonalDataWhenAccessIsDenied() {
+        User outsider = new User();
+        outsider.setId(7L);
+        doThrow(new AccessDeniedException("denied"))
+                .when(authEventService).checkUserAccess(11L, outsider.getId());
+
+        assertThrows(AccessDeniedException.class,
+                () -> bookingService.getBookingsByEventIdAndEmail(11L, "guest@example.test", outsider));
+
+        verify(bookingRepository, never()).findAllByEventIdAndEmail(anyLong(), anyString());
     }
 
     @Test
@@ -199,11 +296,13 @@ public class BookingServiceTest {
         Booking booking = new Booking();
         booking.setBookingStatus(BookingStatus.CREATED);
         booking.setUuid(UUID.randomUUID());
+        UUID originalUuid = booking.getUuid();
         when(bookingRepository.findAllByEventId(eventId)).thenReturn(List.of(booking));
         bookingService.anonymizeBookingsByEventId(eventId);
         assertEquals("ANONYMIZED", booking.getName());
         assertEquals("ANONYMIZED", booking.getSurname());
-        assertEquals("anon_" + booking.getUuid() + "@anonymized.local", booking.getEmail());
+        assertEquals("anonimo@example.invalid", booking.getEmail());
+        assertNotEquals(originalUuid, booking.getUuid());
         assertNull(booking.getPhone());
         verify(bookingRepository, times(1)).findAllByEventId(eventId);
     }
@@ -211,7 +310,10 @@ public class BookingServiceTest {
     @Test
     void testCheckIn_WhenEventFinished_ShouldThrowException() {
         UUID bookingId = UUID.randomUUID();
+        User user  = new User();
+        user.setId(7L);
         Event event = new Event();
+        event.setId(11L);
         event.setEventState(EventState.FINISHED);
         Booking booking = new Booking();
         booking.setUuid(bookingId);
@@ -219,8 +321,9 @@ public class BookingServiceTest {
         booking.setCheckInDateTime(null);
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(bookingId)).thenReturn(Optional.of(booking));
-        assertThrows(EventFinishedException.class, () -> bookingService.checkInBooking(bookingId));
+        assertThrows(EventFinishedException.class, () -> bookingService.checkInBooking(bookingId,user));
         verify(bookingRepository, times(1)).findForCheckInByUuid(bookingId);
+        verify(authEventService).checkStaffAccess(event.getId(), user.getId());
     }
 }
 

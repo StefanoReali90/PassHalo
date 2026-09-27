@@ -9,6 +9,7 @@ import org.spring.passhalo.booking.service.BookingService;
 import org.spring.passhalo.event.dto.EventDashboardResponse;
 import org.spring.passhalo.event.dto.EventRequest;
 import org.spring.passhalo.event.dto.EventResponse;
+import org.spring.passhalo.event.dto.MyEventResponse;
 import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.entity.EventFaq;
 import org.spring.passhalo.event.enums.EventState;
@@ -20,18 +21,22 @@ import org.spring.passhalo.event.mapper.EventMapper;
 import org.spring.passhalo.event.repository.EventRepository;
 import org.spring.passhalo.user.entity.EventMembership;
 import org.spring.passhalo.user.entity.User;
+import org.spring.passhalo.user.enums.EventRole;
 import org.spring.passhalo.user.enums.MembershipState;
 import org.spring.passhalo.user.repository.EventMembershipRepository;
 import org.spring.passhalo.user.service.AuthEventService;
+import org.spring.passhalo.user.service.EventJoinService;
+import org.spring.passhalo.user.service.StaffAccessService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -47,9 +52,11 @@ public class EventService {
     private final BookingService bookingService;
     private final AuthEventService authEventService;
     private final EventMembershipRepository eventMembershipRepository;
+    private final EventJoinService eventJoinService;
+    private final StaffAccessService staffAccessService;
 
     private void validateEventDates(EventRequest event) {
-        if (event.start().isAfter(event.end())) {
+        if (!event.start().isBefore(event.end())) {
             throw new InvalidDateException("Start date must be before end date");
         }
         if (!(event.bookingPrice() < event.normalPrice())) {
@@ -111,26 +118,33 @@ public class EventService {
     }
 
     @Transactional(readOnly = true)
-    public List<EventResponse> getEventsByUser(Long userId) {
-        List<Event> events = eventRepository.findByUserId(userId);
+    public List<MyEventResponse> getEventsByUser(Long userId) {
+        List<Event> ownedEvents = eventRepository.findByUserId(userId);
         List< EventMembership> memberships = eventMembershipRepository.findByCollaboratorIdAndMembershipState(userId, MembershipState.ACTIVE);
         LocalDateTime now = LocalDateTime.now(ZoneId.of(timezone));
-        memberships.removeIf(membership -> now.isBefore(membership.getValidFrom()) || (membership.getValidUntil() != null && (membership.getValidUntil().isEqual(now) || membership.getValidUntil().isBefore(now))));
-        List<Event> collaboratedEvents = memberships.stream()
-                .map(EventMembership::getEvent)
-                .toList();
-        Set<Long> seenIds = events.stream()
-                .map(Event::getId)
-                .collect(Collectors.toSet());
+        List<MyEventResponse> results = new ArrayList<>();
+        Set<Long> seenIds = new HashSet<>();
 
-        events.addAll(
-                collaboratedEvents.stream()
-                        .filter(event -> seenIds.add(event.getId()))
-                        .toList()
-        );
-        return events.stream()
-                .map(eventMapper::toResponse)
-                .toList();
+        for (Event event : ownedEvents) {
+            if (seenIds.add(event.getId())) {
+                results.add(new MyEventResponse(eventMapper.toResponse(event), EventRole.EVENT_ADMIN, true));
+            }
+        }
+        for (EventMembership membership : memberships) {
+            if (now.isBefore(membership.getValidFrom()) ||
+                    (membership.getValidUntil() != null && !now.isBefore(membership.getValidUntil()))) {
+                continue;
+            }
+            Event event = membership.getEvent();
+            if (membership.getRole() == EventRole.STAFF &&
+                    (event.getEventState() == EventState.FINISHED || !now.isBefore(event.getEndDateTime()))) {
+                continue;
+            }
+            if (seenIds.add(event.getId())) {
+                results.add(new MyEventResponse(eventMapper.toResponse(event), membership.getRole(), false));
+            }
+        }
+        return results;
     }
 
     @Transactional
@@ -140,6 +154,7 @@ public class EventService {
         if(event.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Cannot delete a finished event");
         }
+        staffAccessService.deleteForEvent(id);
         eventRepository.deleteById(id);
     }
     @Transactional
@@ -211,6 +226,8 @@ public class EventService {
         }
         event.setEventState(EventState.FINISHED);
         eventRepository.save(event);
+        eventJoinService.expireRequestsForEvent(eventId);
+        staffAccessService.expireForEvent(eventId);
         log.info("Event ID: {} closed by Admin ID: {} - Transitioned to FINISHED", eventId, admin.getId());
         bookingService.anonymizeBookingsByEventId(eventId);
     }

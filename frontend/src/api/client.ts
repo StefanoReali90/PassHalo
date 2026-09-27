@@ -38,7 +38,8 @@ export function isApiError(error: unknown): error is ApiError {
 function emitExpiredSession(endpoint: string, status: number) {
     const sessionProbe = endpoint === '/user/me';
     const loginAttempt = endpoint === '/user/login';
-    if (status === 401 && !sessionProbe && !loginAttempt) {
+    const anonymousStaffSession = endpoint.startsWith('/staff-access/');
+    if (status === 401 && !sessionProbe && !loginAttempt && !anonymousStaffSession) {
         window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     }
 }

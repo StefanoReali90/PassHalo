@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { CheckCircle2, Keyboard, QrCode, Wifi, WifiOff, XCircle } from 'lucide-react';
+import { CheckCircle2, Keyboard, Minus, Plus, QrCode, Wifi, WifiOff, XCircle } from 'lucide-react';
 import { checkInBooking } from '../api/booking';
+import { decrementWalkInCount, getMyEvents, incrementWalkInCount } from '../api/events';
 import { QrCameraScanner } from '../components/QrCameraScanner';
+import type { MyEvent } from '../types';
 
 interface ScanHistoryItem {
     id: number;
@@ -28,6 +30,13 @@ export function StaffScanPage() {
     const [success, setSuccess] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [history, setHistory] = useState<ScanHistoryItem[]>([]);
+    const [events, setEvents] = useState<MyEvent[]>([]);
+    const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+    const [eventsLoading, setEventsLoading] = useState(true);
+    const [eventsError, setEventsError] = useState('');
+    const [walkInBusy, setWalkInBusy] = useState(false);
+    const [walkInMessage, setWalkInMessage] = useState('');
+    const [sessionWalkIns, setSessionWalkIns] = useState<Record<number, number>>({});
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -45,6 +54,23 @@ export function StaffScanPage() {
         focusScannerInput(inputRef.current);
     }, []);
 
+    useEffect(() => {
+        let active = true;
+        getMyEvents()
+            .then((myEvents) => {
+                if (!active) return;
+                const operational = myEvents.filter((event) => event.eventState !== 'FINISHED');
+                setEvents(operational);
+                const requestedEventId = Number(new URLSearchParams(window.location.search).get('eventId'));
+                setSelectedEventId(operational.find((event) => event.id === requestedEventId)?.id ?? operational[0]?.id ?? null);
+            })
+            .catch((requestError) => {
+                if (active) setEventsError(requestError instanceof Error ? requestError.message : 'Eventi assegnati non disponibili.');
+            })
+            .finally(() => { if (active) setEventsLoading(false); });
+        return () => { active = false; };
+    }, []);
+
     const addHistory = useCallback((status: ScanHistoryItem['status'], description: string) => {
         setHistory((current) => [{
             id: Date.now(),
@@ -56,14 +82,14 @@ export function StaffScanPage() {
 
     const validatePass = useCallback(async (rawValue: string) => {
         const uuid = extractUuid(rawValue);
-        if (!uuid || busy || !online) return;
+        if (!uuid || busy || !online || events.length === 0) return;
 
         setBusy(true);
         setSuccess(null);
         setError(null);
         try {
             const result = await checkInBooking(uuid);
-            const description = `${result.name} ${result.surname} · ${result.eventName}`;
+            const description = `Pass convalidato · ${result.eventName}`;
             setSuccess(description);
             setToken('');
             addHistory('success', description);
@@ -77,7 +103,22 @@ export function StaffScanPage() {
             setBusy(false);
             window.setTimeout(() => focusScannerInput(inputRef.current), 0);
         }
-    }, [addHistory, busy, online]);
+    }, [addHistory, busy, online, events.length]);
+
+    const adjustWalkIns = async (direction: 'increment' | 'decrement') => {
+        if (selectedEventId === null || walkInBusy || !online) return;
+        setWalkInBusy(true);
+        setEventsError('');
+        setWalkInMessage('');
+        try {
+            if (direction === 'increment') await incrementWalkInCount(selectedEventId);
+            else await decrementWalkInCount(selectedEventId);
+            setSessionWalkIns((current) => ({ ...current, [selectedEventId]: (current[selectedEventId] ?? 0) + (direction === 'increment' ? 1 : -1) }));
+            setWalkInMessage(direction === 'increment' ? 'Ingresso senza prenotazione registrato.' : 'Ultimo ingresso senza prenotazione rimosso.');
+        } catch (requestError) {
+            setEventsError(requestError instanceof Error ? requestError.message : 'Conteggio ingressi non aggiornato.');
+        } finally { setWalkInBusy(false); }
+    };
 
     const check = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -98,6 +139,8 @@ export function StaffScanPage() {
             </div>
 
             {!online && <div className="notice error" role="alert"><WifiOff size={17} />Il check-in richiede una connessione al server per impedire riutilizzi dello stesso QR.</div>}
+            {eventsError && <div className="notice error" role="alert">{eventsError}</div>}
+            {!eventsLoading && events.length === 0 && <div className="notice error" role="alert">Non hai eventi attivi assegnati.</div>}
 
             <div className="scan-grid">
                 <article className="panel scan-panel">
@@ -114,7 +157,7 @@ export function StaffScanPage() {
                         </div>
                     )}
 
-                    <QrCameraScanner disabled={busy || !online} onDetected={validatePass} />
+                    <QrCameraScanner disabled={busy || !online || eventsLoading || events.length === 0} onDetected={validatePass} />
 
                     <div className="scan-divider"><span>oppure</span></div>
                     <form onSubmit={check}>
@@ -129,7 +172,7 @@ export function StaffScanPage() {
                                 autoComplete="off"
                                 required
                             />
-                            <button className="button primary" disabled={busy || !online || !token.trim()}>{busy ? 'Verifica…' : 'Convalida'}</button>
+                            <button className="button primary" disabled={busy || !online || eventsLoading || events.length === 0 || !token.trim()}>{busy ? 'Verifica…' : 'Convalida'}</button>
                         </div>
                     </form>
                 </article>
@@ -147,7 +190,28 @@ export function StaffScanPage() {
                             ))}
                         </ol>
                     )}
-                    <p className="scan-role-note">Lo STAFF può convalidare i pass, ma non può accedere a statistiche o dati amministrativi.</p>
+                    <p className="scan-role-note">La verifica mostra soltanto l’esito e l’evento, senza dati personali del cliente.</p>
+                    <div className="walk-in-tools">
+                        <span className="eyebrow">Ingressi senza prenotazione</span>
+                        <h2>Registra gli accessi in cassa</h2>
+                        <label htmlFor="walk-in-event">Evento</label>
+                        <select id="walk-in-event" value={selectedEventId ?? ''} onChange={(event) => {
+                            const eventId = Number(event.target.value);
+                            setSelectedEventId(eventId);
+                            setWalkInMessage('');
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('eventId', String(eventId));
+                            window.history.replaceState(null, '', url);
+                        }} disabled={eventsLoading || events.length === 0}>
+                            {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+                        </select>
+                        <p>Registrati da questo dispositivo durante la sessione: <strong>{selectedEventId === null ? 0 : sessionWalkIns[selectedEventId] ?? 0}</strong></p>
+                        <div className="counter-actions">
+                            <button className="button" disabled={walkInBusy || !online || selectedEventId === null || (sessionWalkIns[selectedEventId] ?? 0) <= 0} onClick={() => void adjustWalkIns('decrement')}><Minus size={16} /> Correggi</button>
+                            <button className="button primary" disabled={walkInBusy || !online || selectedEventId === null} onClick={() => void adjustWalkIns('increment')}><Plus size={16} /> Aggiungi ingresso</button>
+                        </div>
+                        {walkInMessage && <p className="notice success" role="status">{walkInMessage}</p>}
+                    </div>
                 </aside>
             </div>
         </section>

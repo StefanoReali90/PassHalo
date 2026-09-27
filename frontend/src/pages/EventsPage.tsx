@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowUpRight, CalendarDays, CircleHelp, Edit3, Film, MapPin, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, CircleHelp, Edit3, Film, MapPin, Plus, RefreshCw, Trash2, UsersRound, X } from 'lucide-react';
 import { createEvent, deleteEvent, getEventById, getMyEvents, updateEvent } from '../api/events';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import type { Event, EventFaq, EventRequest, EventState } from '../types';
+import { useAuth } from '../context/useAuth';
+import { Link } from 'react-router-dom';
+import type { Event, EventFaq, EventRequest, EventState, MyEvent } from '../types';
 
 interface EventFormState {
     name: string;
@@ -66,7 +68,9 @@ function eventToForm(event: Event): EventFormState {
 }
 
 export function EventsPage() {
-    const [events, setEvents] = useState<Event[]>([]);
+    const { user } = useAuth();
+    const canCreate = user?.role === 'ADMIN';
+    const [events, setEvents] = useState<MyEvent[]>([]);
     const [form, setForm] = useState<EventFormState>(emptyForm);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [presentationDirty, setPresentationDirty] = useState(false);
@@ -82,7 +86,7 @@ export function EventsPage() {
         setLoading(true);
         setError('');
         try {
-            setEvents(await getMyEvents());
+            setEvents((await getMyEvents()).filter((event) => event.role === 'EVENT_ADMIN'));
         } catch (requestError) {
             setError(requestError instanceof Error ? requestError.message : 'Impossibile caricare gli eventi.');
         } finally {
@@ -93,8 +97,8 @@ export function EventsPage() {
     useEffect(() => {
         let active = true;
         getMyEvents()
-            .then((ownedEvents) => {
-                if (active) setEvents(ownedEvents);
+            .then((manageableEvents) => {
+                if (active) setEvents(manageableEvents.filter((event) => event.role === 'EVENT_ADMIN'));
             })
             .catch((requestError) => {
                 if (active) setError(requestError instanceof Error ? requestError.message : 'Impossibile caricare gli eventi.');
@@ -196,12 +200,14 @@ export function EventsPage() {
         }
 
         try {
-            if (editingId === null) {
+            if (editingId === null && canCreate) {
                 await createEvent(payload);
                 setMessage('Evento creato con successo.');
-            } else {
+            } else if (editingId !== null) {
                 await updateEvent(editingId, payload);
                 setMessage('Evento aggiornato con successo.');
+            } else {
+                throw new Error('Non puoi creare un nuovo evento con questo account.');
             }
             setEditingId(null);
             setPresentationDirty(false);
@@ -237,7 +243,7 @@ export function EventsPage() {
                 <div>
                     <span className="eyebrow">Amministrazione / Eventi</span>
                     <h1>Programma e pubblica<span className="accent-text">.</span></h1>
-                    <p>Crea gli eventi, aggiorna le informazioni e controlla il loro stato.</p>
+                    <p>{canCreate ? 'Crea gli eventi, aggiorna le informazioni e controlla il loro stato.' : 'Aggiorna gli eventi per cui hai il ruolo di amministratore.'}</p>
                 </div>
                 <button className="button" onClick={() => void loadEvents()} disabled={loading}>
                     <RefreshCw size={16} className={loading ? 'spinning' : ''} /> Aggiorna
@@ -247,8 +253,8 @@ export function EventsPage() {
             {error && <div className="notice error" role="alert">{error}</div>}
             {message && <div className="notice success" role="status">{message}</div>}
 
-            <div className="management-grid">
-                <article className="panel editor-panel" id="event-editor">
+            <div className={`management-grid ${!canCreate && editingId === null ? 'collaborator-event-grid' : ''}`}>
+                {(canCreate || editingId !== null) && <article className="panel editor-panel" id="event-editor">
                     <div className="panel-heading">
                         <div>
                             <span className="eyebrow">{editingId === null ? 'Nuovo evento' : `Modifica evento #${editingId}`}</span>
@@ -301,7 +307,7 @@ export function EventsPage() {
                             {saving ? 'Salvataggio…' : editingId === null ? 'Crea evento' : 'Salva modifiche'}
                         </button>
                     </form>
-                </article>
+                </article>}
 
                 <div className="resource-list" aria-busy={loading}>
                     {loading && <div className="panel empty-state"><h2>Caricamento eventi…</h2></div>}
@@ -309,7 +315,7 @@ export function EventsPage() {
                         <div className="panel empty-state">
                             <CalendarDays size={28} />
                             <h2>Nessun evento</h2>
-                            <p>Compila il modulo per pubblicare il primo evento.</p>
+                            <p>{canCreate ? 'Compila il modulo per pubblicare il primo evento.' : 'Non hai eventi da amministrare.'}</p>
                         </div>
                     )}
                     {!loading && events.map((event) => (
@@ -320,6 +326,7 @@ export function EventsPage() {
                                     <div>
                                         <span className={`state-badge state-${event.eventState.toLowerCase()}`}>{stateLabels[event.eventState]}</span>
                                         <h2>{event.name}</h2>
+                                        <span className="role-badge role-admin">{event.owner ? 'Proprietario' : 'Amministratore evento'}</span>
                                     </div>
                                     <span className="resource-id">#{event.id}</span>
                                 </div>
@@ -338,6 +345,7 @@ export function EventsPage() {
                                     <span>{event.totalTickets.toLocaleString('it-IT')} posti · {event.bookingPrice.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}</span>
                                     <div>
                                         <a className="button" href={`/prenota?eventId=${event.id}`} target="_blank" rel="noreferrer"><ArrowUpRight size={15} /> Pagina</a>
+                                        <Link className="button" to={`/admin/events/${event.id}/team`}><UsersRound size={15} /> Collaboratori</Link>
                                         <button className="button" disabled={loadingEditor || event.eventState === 'FINISHED'} onClick={() => void edit(event.id)}><Edit3 size={15} /> Modifica</button>
                                         <button className="button danger" disabled={deletingId === event.id || event.eventState === 'FINISHED'} onClick={() => setEventToDelete(event)}><Trash2 size={15} /> Elimina</button>
                                     </div>

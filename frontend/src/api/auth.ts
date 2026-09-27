@@ -5,7 +5,6 @@ import type {
     ForgotPasswordRequest,
     LoginResponse,
     ResetPasswordRequest,
-    StaffRegisterRequest,
     User,
 } from '../types';
 
@@ -31,13 +30,6 @@ export function logout(): Promise<void> {
 
 export function registerAdmin(data: AdminRegisterRequest): Promise<User> {
     return apiFetch<User>('/user/register', {
-        method: 'POST',
-        body: JSON.stringify(data),
-    });
-}
-
-export function registerStaff(data: StaffRegisterRequest): Promise<User> {
-    return apiFetch<User>('/user/staff-register', {
         method: 'POST',
         body: JSON.stringify(data),
     });

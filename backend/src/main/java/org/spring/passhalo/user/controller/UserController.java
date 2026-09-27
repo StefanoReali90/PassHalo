@@ -27,12 +27,6 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @PostMapping(path = "/staff-register", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<UserResponse> registerStaffUser(@Valid @RequestBody StaffRegistrationRequest request) {
-        UserResponse response = userService.createStaffUser(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
     @GetMapping(path = "/search", produces = "application/json")
     public ResponseEntity<UserResponse> getUserByEmail(@RequestParam String email) {
         UserResponse response = userService.getUserByEmail(email);

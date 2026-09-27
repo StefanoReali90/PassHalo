@@ -6,13 +6,13 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EventComparisonChart, type EventComparisonItem } from '../components/EventComparisonChart';
 import { EventResultsCharts } from '../components/EventResultsCharts';
 import { closeEvent, decrementWalkInCount, getEventDashboard, getMyEvents, incrementWalkInCount } from '../api/events';
-import type { Event, EventDashboardResponse } from '../types';
+import type { EventDashboardResponse, MyEvent } from '../types';
 
 const number = (value: number) => value.toLocaleString('it-IT');
 const money = (value: number) => value.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
 
 export function AdminDashboardPage() {
-    const [events, setEvents] = useState<Event[]>([]);
+    const [events, setEvents] = useState<MyEvent[]>([]);
     const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
     const [data, setData] = useState<EventDashboardResponse | null>(null);
     const [busy, setBusy] = useState(true);
@@ -29,13 +29,15 @@ export function AdminDashboardPage() {
     useEffect(() => {
         let active = true;
         getMyEvents()
-            .then(async (ownedEvents) => {
+            .then(async (myEvents) => {
                 if (!active) return;
-                setEvents(ownedEvents);
-                const firstEventId = ownedEvents[0]?.id ?? null;
+                const manageableEvents = myEvents.filter((event) => event.role === 'EVENT_ADMIN');
+                setEvents(manageableEvents);
+                const requestedEventId = Number(new URLSearchParams(window.location.search).get('eventId'));
+                const firstEventId = manageableEvents.find((event) => event.id === requestedEventId)?.id ?? manageableEvents[0]?.id ?? null;
                 setSelectedEventId(firstEventId);
                 if (firstEventId === null) {
-                    setError('Non hai ancora creato un evento.');
+                    setError('Non hai eventi da amministrare.');
                     return;
                 }
                 const dashboard = await getEventDashboard(firstEventId);
@@ -78,6 +80,9 @@ export function AdminDashboardPage() {
 
     const selectEvent = (eventId: number) => {
         setSelectedEventId(eventId);
+        const url = new URL(window.location.href);
+        url.searchParams.set('eventId', String(eventId));
+        window.history.replaceState(null, '', url);
         setData(null);
         setMessage('');
         void loadDashboard(eventId);

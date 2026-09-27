@@ -2,6 +2,7 @@ package org.spring.passhalo.user.service;
 
 import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.event.entity.Event;
+import org.spring.passhalo.event.enums.EventState;
 import org.spring.passhalo.event.exception.AccessDeniedException;
 import org.spring.passhalo.event.exception.EventNotFoundException;
 import org.spring.passhalo.event.repository.EventRepository;
@@ -58,6 +59,10 @@ public class AuthEventService {
     public void checkStaffAccess(Long eventId, Long userId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found"));
+        LocalDateTime now = LocalDateTime.now(ZoneId.of(timezone));
+        if (event.getEventState() == EventState.FINISHED || !now.isBefore(event.getEndDateTime())) {
+            throw new AccessDeniedException("Operational access to this event has expired");
+        }
         if (event.getUser().getId().equals(userId)) {
             return;
         }
@@ -66,7 +71,6 @@ public class AuthEventService {
         if (membership.getMembershipState() != MembershipState.ACTIVE) {
             throw new AccessDeniedException("User is not an active member of the event");
         }
-        LocalDateTime now = LocalDateTime.now(ZoneId.of(timezone));
         if (now.isBefore(membership.getValidFrom())) {
             throw new AccessDeniedException("User's membership is not valid at this time");
         }

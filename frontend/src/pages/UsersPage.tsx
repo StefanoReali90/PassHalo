@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { RefreshCw, Search, ShieldCheck, Trash2, UserPlus, UsersRound } from 'lucide-react';
-import { deleteUser, getUserByEmail, getUserById, getUsers, registerStaff } from '../api/auth';
+import { RefreshCw, Search, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
+import { deleteUser, getUserByEmail, getUserById, getUsers } from '../api/auth';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { User } from '../types';
 
@@ -14,7 +14,6 @@ export function UsersPage() {
     const [users, setUsers] = useState<User[]>([]);
     const [lookup, setLookup] = useState<LookupResult | null>(null);
     const [loading, setLoading] = useState(true);
-    const [creating, setCreating] = useState(false);
     const [searching, setSearching] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -50,30 +49,6 @@ export function UsersPage() {
             active = false;
         };
     }, []);
-
-    const createStaff = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const data = new FormData(form);
-        setCreating(true);
-        setError('');
-        setMessage('');
-        try {
-            const created = await registerStaff({
-                name: String(data.get('name')).trim(),
-                surname: String(data.get('surname')).trim(),
-                email: String(data.get('email')).trim(),
-                password: String(data.get('password')),
-            });
-            form.reset();
-            setMessage(`Account STAFF creato per ${created.name} ${created.surname}.`);
-            await loadUsers();
-        } catch (requestError) {
-            setError(requestError instanceof Error ? requestError.message : 'Creazione account non riuscita.');
-        } finally {
-            setCreating(false);
-        }
-    };
 
     const searchByEmail = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -144,7 +119,7 @@ export function UsersPage() {
                 <div>
                     <span className="eyebrow">Amministrazione / Utenti</span>
                     <h1>La squadra al completo<span className="accent-text">.</span></h1>
-                    <p>Crea gli account STAFF e gestisci le utenze interne.</p>
+                    <p>Consulta e gestisci gli account degli organizzatori.</p>
                 </div>
                 <button className="button" onClick={() => void loadUsers()} disabled={loading}>
                     <RefreshCw size={16} className={loading ? 'spinning' : ''} /> Aggiorna
@@ -155,20 +130,6 @@ export function UsersPage() {
             {message && <div className="notice success" role="status">{message}</div>}
 
             <div className="management-grid users-grid">
-                <article className="panel editor-panel">
-                    <div className="panel-heading"><div><span className="eyebrow">Nuovo operatore</span><h2>Crea account STAFF</h2></div><UserPlus size={21} /></div>
-                    <p>Lo staff potrà accedere esclusivamente al controllo ingressi.</p>
-                    <form className="management-form" onSubmit={createStaff}>
-                        <div className="field-row">
-                            <label>Nome<input name="name" autoComplete="given-name" required /></label>
-                            <label>Cognome<input name="surname" autoComplete="family-name" required /></label>
-                        </div>
-                        <label>Email<input name="email" type="email" autoComplete="email" required /></label>
-                        <label>Password iniziale<input name="password" type="password" autoComplete="new-password" minLength={8} maxLength={100} required /></label>
-                        <button className="button primary full" disabled={creating}><UserPlus size={16} />{creating ? 'Creazione…' : 'Crea account STAFF'}</button>
-                    </form>
-                </article>
-
                 <div>
                     <article className="panel lookup-panel">
                         <div className="panel-heading"><div><span className="eyebrow">Ricerca puntuale</span><h2>Trova un utente</h2></div><Search size={20} /></div>
