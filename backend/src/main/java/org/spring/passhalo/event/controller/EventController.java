@@ -44,7 +44,7 @@ public class EventController {
         return ResponseEntity.ok(eventResponse);
     }
 
-    @GetMapping(path = "", produces = "application/json")
+    @GetMapping(path = {"", "/"}, produces = "application/json")
     public ResponseEntity<List<EventResponse>> getAllEvents() {
         List<EventResponse> eventResponses = eventService.getAllEvents();
         return ResponseEntity.ok(eventResponses);

@@ -57,11 +57,11 @@ class EventServiceTest {
     }
 
     @Test
-    void reducedPriceMustBeLowerThanNormalPrice() {
+    void bookingPriceCannotExceedNormalPrice() {
         LocalDateTime start = LocalDateTime.now().plusDays(1);
 
         assertThrows(InvalidPriceException.class,
-                () -> service.createEvent(request(start, start.plusHours(4), 15.0, 15.0), owner()));
+                () -> service.createEvent(request(start, start.plusHours(4), 16.0, 15.0), owner()));
 
         verifyNoInteractions(eventMapper, eventRepository);
     }

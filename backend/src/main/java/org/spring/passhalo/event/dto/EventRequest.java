@@ -8,16 +8,20 @@ import java.util.List;
 
 public record EventRequest(
         @NotBlank
+        @Size(max = 255)
         String name,
         @NotBlank
+        @Size(max = 4000)
         String description,
         @NotBlank
+        @Size(max = 255)
         String location,
         @NotNull
         LocalDateTime start,
         @NotNull
         LocalDateTime end,
         @NotBlank
+        @Size(max = 2048)
         String imageUrl,
         @NotNull
         @Positive
@@ -31,8 +35,7 @@ public record EventRequest(
         @Size(max=2048)
         String videoUrl,
         @Size(max = 12)
-        @Valid
-        List<EventFaqDTO> faqs
+        List<@Valid EventFaqDTO> faqs
 
 
 ) {

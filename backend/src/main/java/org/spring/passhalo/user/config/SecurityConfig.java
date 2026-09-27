@@ -108,7 +108,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/bookings/{uuid}").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/events/{id}/walk-in", "/events/{id}/walk-in/decrement", "/events/{id}/close").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/bookings/check-in/{uuid}").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/events", "/events/{id}").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/events", "/events/", "/events/{id}").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

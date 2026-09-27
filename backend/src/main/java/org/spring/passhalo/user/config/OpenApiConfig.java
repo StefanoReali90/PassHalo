@@ -18,7 +18,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("PassHalo API")
-                        .description("API REST per la piattaforma di gestione eventi, biglietteria ridotta, QR code e check-in.")
+                        .description("API REST per la piattaforma di gestione eventi, prenotazioni, QR code e check-in.")
                         .version("1.0.0"))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()

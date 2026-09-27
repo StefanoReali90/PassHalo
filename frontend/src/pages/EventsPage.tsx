@@ -286,9 +286,9 @@ export function EventsPage() {
                     </div>
 
                     <form className="management-form" onSubmit={submit}>
-                        <label>Nome evento<input value={form.name} onChange={(e) => updateField('name', e.target.value)} required /></label>
+                        <label>Nome evento<input value={form.name} onChange={(e) => updateField('name', e.target.value)} maxLength={255} required /></label>
                         <label>Descrizione pubblica<textarea value={form.description} onChange={(e) => updateField('description', e.target.value)} rows={6} maxLength={4000} required /></label>
-                        <label>Luogo<input value={form.location} onChange={(e) => updateField('location', e.target.value)} required /></label>
+                        <label>Luogo<input value={form.location} onChange={(e) => updateField('location', e.target.value)} maxLength={255} required /></label>
                         <div className="field-row">
                             <label>Inizio<input type="datetime-local" value={form.start} onChange={(e) => updateField('start', e.target.value)} required /></label>
                             <label>Fine<input type="datetime-local" value={form.end} onChange={(e) => updateField('end', e.target.value)} required /></label>

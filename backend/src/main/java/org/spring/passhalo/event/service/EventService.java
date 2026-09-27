@@ -59,8 +59,8 @@ public class EventService {
         if (!event.start().isBefore(event.end())) {
             throw new InvalidDateException("Start date must be before end date");
         }
-        if (!(event.bookingPrice() < event.normalPrice())) {
-            throw new InvalidPriceException("Booking price must be less than normal price");
+        if (event.bookingPrice() > event.normalPrice()) {
+            throw new InvalidPriceException("Booking price cannot exceed normal price");
         }
     }
 
