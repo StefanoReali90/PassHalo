@@ -13,6 +13,7 @@ import org.spring.passhalo.booking.enums.BookingStatus;
 import org.spring.passhalo.booking.exception.*;
 import org.spring.passhalo.booking.mapper.BookingMapper;
 import org.spring.passhalo.booking.repository.BookingRepository;
+import org.spring.passhalo.security.PiiCryptoService;
 import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.enums.EventState;
 import org.spring.passhalo.event.exception.AccessDeniedException;
@@ -40,6 +41,9 @@ public class BookingServiceTest {
 
     @Mock
     private BookingRepository bookingRepository;
+
+    @Mock
+    private PiiCryptoService cryptoService;
 
     @Mock
     private BookingMapper bookingMapper;
@@ -174,7 +178,9 @@ public class BookingServiceTest {
         event.setTotalTickets(300);
         when(bookingMapper.toEntity(request)).thenReturn(new Booking());
         when(eventRepository.findById(1L)).thenReturn(Optional.of(event));
-        when(bookingRepository.existsByEventIdAndEmailAndBookingStatusNot(1L, "mario.rossi@example.com", BookingStatus.CANCELLED)).thenReturn(false);
+        when(cryptoService.emailLookupHash("mario.rossi@example.com")).thenReturn("v1:lookup-hash");
+        when(bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(1L, "v1:lookup-hash", BookingStatus.CANCELLED)).thenReturn(false);
+        when(bookingRepository.existsByEventIdAndEmailIgnoreCaseAndBookingStatusNot(1L, "mario.rossi@example.com", BookingStatus.CANCELLED)).thenReturn(false);
         when(bookingRepository.countByEventIdAndBookingStatusNot(1L, BookingStatus.CANCELLED)).thenReturn(0L);
         when(bookingRepository.save(any(Booking.class))).thenReturn(booking);
         when(qrCodeService.createQrCode(anyString())).thenReturn("mock-qr-base64");
@@ -184,7 +190,7 @@ public class BookingServiceTest {
         assertNotNull(response);
         assertEquals(expectedResponse, response);
         verify(bookingRepository, times(1)).save(any(Booking.class));
-        verify(emailService, times(1)).sendBookingConfirmation(any(), any(), any(), any());
+        verify(emailService, times(1)).sendBookingConfirmation(any(), any(), any(), any(), any());
         verify(marketingService, times(1)).registerConsent(any(), any(), any());
 
     }
@@ -202,7 +208,8 @@ public class BookingServiceTest {
         BookingRequest request = new BookingRequest("Mario", "Rossi", "mario.rossi@example.com", "1234567890", 1L, true);
         when(bookingMapper.toEntity(request)).thenReturn(new Booking());
         when(eventRepository.findById(1L)).thenReturn(Optional.of(new Event()));
-        when(bookingRepository.existsByEventIdAndEmailAndBookingStatusNot(1L, "mario.rossi@example.com", BookingStatus.CANCELLED)).thenReturn(true);
+        when(cryptoService.emailLookupHash("mario.rossi@example.com")).thenReturn("v1:lookup-hash");
+        when(bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(1L, "v1:lookup-hash", BookingStatus.CANCELLED)).thenReturn(true);
         assertThrows(AlreadyBookedException.class, () -> bookingService.createBooking(request));
     }
 
@@ -214,7 +221,9 @@ public class BookingServiceTest {
         event.setTotalTickets(100);
         when(bookingMapper.toEntity(request)).thenReturn(new Booking());
         when(eventRepository.findById(1L)).thenReturn(Optional.of(event));
-        when(bookingRepository.existsByEventIdAndEmailAndBookingStatusNot(1L, "mario.rossi@example.com", BookingStatus.CANCELLED)).thenReturn(false);
+        when(cryptoService.emailLookupHash("mario.rossi@example.com")).thenReturn("v1:lookup-hash");
+        when(bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(1L, "v1:lookup-hash", BookingStatus.CANCELLED)).thenReturn(false);
+        when(bookingRepository.existsByEventIdAndEmailIgnoreCaseAndBookingStatusNot(1L, "mario.rossi@example.com", BookingStatus.CANCELLED)).thenReturn(false);
         when(bookingRepository.countByEventIdAndBookingStatusNot(1L, BookingStatus.CANCELLED)).thenReturn(300L);
         assertThrows(NoTicketException.class, () -> bookingService.createBooking(request));
     }
@@ -287,7 +296,9 @@ public class BookingServiceTest {
         assertThrows(AccessDeniedException.class,
                 () -> bookingService.getBookingsByEventIdAndEmail(11L, "guest@example.test", outsider));
 
-        verify(bookingRepository, never()).findAllByEventIdAndEmail(anyLong(), anyString());
+        verify(bookingRepository, never()).findAllByEventIdAndEmailIgnoreCase(anyLong(), anyString());
+        verify(bookingRepository, never()).findAllByEventIdAndEmailLookupHash(anyLong(), anyString());
+        verifyNoInteractions(cryptoService);
     }
 
     @Test
@@ -299,9 +310,13 @@ public class BookingServiceTest {
         UUID originalUuid = booking.getUuid();
         when(bookingRepository.findAllByEventId(eventId)).thenReturn(List.of(booking));
         bookingService.anonymizeBookingsByEventId(eventId);
-        assertEquals("ANONYMIZED", booking.getName());
-        assertEquals("ANONYMIZED", booking.getSurname());
-        assertEquals("anonimo@example.invalid", booking.getEmail());
+        assertNull(booking.getNameCiphertext());
+        assertNull(booking.getSurnameCiphertext());
+        assertNull(booking.getEmailCiphertext());
+        assertNull(booking.getEmailLookupHash());
+        assertNull(booking.getName());
+        assertNull(booking.getSurname());
+        assertNull(booking.getEmail());
         assertNotEquals(originalUuid, booking.getUuid());
         assertNull(booking.getPhone());
         verify(bookingRepository, times(1)).findAllByEventId(eventId);

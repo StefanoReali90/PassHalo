@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 const controllerName = import.meta.env.VITE_PRIVACY_CONTROLLER_NAME?.trim() || 'l’organizzatore dell’evento';
 const contactEmail = import.meta.env.VITE_PRIVACY_CONTACT_EMAIL?.trim();
+const marketingRetentionMonths = import.meta.env.VITE_MARKETING_RETENTION_MONTHS?.trim() || '24';
 
 export function PrivacyPage() {
     return (
@@ -43,7 +44,7 @@ export function PrivacyPage() {
                     <div>
                         <h2>Comunicazioni promozionali</h2>
                         <p>L’invio di aggiornamenti su eventi futuri è separato dalla prenotazione, facoltativo e basato sulla scelta espressa nell’apposita casella. Non selezionarla non impedisce di ottenere il pass.</p>
-                        <p>Il consenso può essere revocato in qualsiasi momento contattando il titolare.</p>
+                        <p>Se acconsenti, nome, cognome ed email vengono conservati separatamente dalla prenotazione per inviarti comunicazioni future, anche dopo la chiusura dell’evento, per un massimo di {marketingRetentionMonths} mesi dal consenso. Puoi revocarlo in qualsiasi momento usando il link nell’email di conferma o contattando il titolare.</p>
                     </div>
                 </section>
 
@@ -52,7 +53,8 @@ export function PrivacyPage() {
                     <div>
                         <h2>Accesso e conservazione</h2>
                         <p>I dati sono accessibili agli amministratori autorizzati. Lo staff addetto all’ingresso può soltanto verificare il QR code e ricevere l’esito del controllo.</p>
-                        <p>I dati identificativi vengono conservati fino alla chiusura amministrativa dell’evento, quando PassHalo ne prevede la cancellazione o anonimizzazione. Restano soltanto risultati aggregati, come numero di prenotazioni e presenze.</p>
+                        <p>Alla chiusura dell’evento il QR viene invalidato e i dati identificativi della prenotazione — nome, cognome, email e telefono — vengono rimossi. La registrazione conserva dati come stato, data e riferimento all’evento: la rimozione degli identificativi diretti non garantisce, da sola, l’anonimizzazione completa.</p>
+                        <p>Alla revoca, i dati identificativi conservati per il marketing vengono cancellati. I dati di prenotazione seguono tempi e finalità distinti: per richiederne l’accesso o la cancellazione, contatta il titolare indicato sopra. Possono restare dati strettamente necessari per obblighi di legge o per tutelare diritti.</p>
                     </div>
                 </section>
 

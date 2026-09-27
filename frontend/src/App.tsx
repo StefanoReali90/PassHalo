@@ -16,6 +16,7 @@ const EventsPage = lazy(() => import('./pages/EventsPage').then((module) => ({ d
 const EventTeamPage = lazy(() => import('./pages/EventTeamPage').then((module) => ({ default: module.EventTeamPage })));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })));
+const MarketingUnsubscribePage = lazy(() => import('./pages/MarketingUnsubscribePage').then((module) => ({ default: module.MarketingUnsubscribePage })));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })));
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((module) => ({ default: module.RegisterPage })));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then((module) => ({ default: module.ResetPasswordPage })));
@@ -32,6 +33,7 @@ const pageTitles: Array<[string, string]> = [
     ['/account', 'Sicurezza account'],
     ['/prenota', 'Prenota il tuo ingresso'],
     ['/privacy', 'Privacy'],
+    ['/marketing/unsubscribe', 'Revoca consenso marketing'],
     ['/register', 'Registrazione organizzatore'],
     ['/forgot-password', 'Recupera password'],
     ['/reset-password', 'Nuova password'],
@@ -91,6 +93,7 @@ export default function App() {
                                     <Route path="/staff/access" element={<StaffAccessPage />} />
                                     <Route path="/prenota" element={<BookingPage />} />
                                     <Route path="/privacy" element={<PrivacyPage />} />
+                                    <Route path="/marketing/unsubscribe" element={<MarketingUnsubscribePage />} />
                                     <Route path="/check-in" element={<Navigate to="/prenota" replace />} />
                                     <Route path="*" element={<div className="form-page"><span className="eyebrow">404</span><h1>Pagina non trovata.</h1><p>Controlla il link che hai ricevuto.</p></div>} />
                                 </Route>

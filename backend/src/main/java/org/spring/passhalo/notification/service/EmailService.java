@@ -23,24 +23,32 @@ public class EmailService {
     @Value("${MAIL_FROM}")
     private String from;
 
+    @Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
     private final JavaMailSender mailSender;
 
     @Async
-    public void sendBookingConfirmation(String to, String customerName, String eventName, byte[] qrCodeBytes) {
+    public void sendBookingConfirmation(String to, String customerName, String eventName, byte[] qrCodeBytes, String unsubscribeToken) {
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
             helper.setFrom(from);
             helper.setTo(to);
             helper.setSubject("Conferma prenotazione per " + eventName);
-            helper.setText("Gentile " + customerName + ",\n\nLa tua prenotazione per l'evento " + eventName + " è stata confermata.\n\nAllegato il codice QR per il tuo ingresso.");
+            String body = "Gentile " + customerName + ",\n\nLa tua prenotazione per l'evento " + eventName + " è stata confermata.\n\nAllegato il codice QR per il tuo ingresso.";
+            if (unsubscribeToken != null) {
+                body += "\n\nHai acconsentito a ricevere comunicazioni promozionali. Puoi revocare il consenso e cancellare i dati marketing in qualsiasi momento qui: "
+                        + frontendBaseUrl.replaceAll("/$", "") + "/marketing/unsubscribe#token=" + unsubscribeToken;
+            }
+            helper.setText(body);
             helper.addAttachment("passhalo_ticket.png", new ByteArrayResource(qrCodeBytes));
             mailSender.send(mimeMessage);
 
 
-            log.info("Sending booking confirmation email for event: {}", eventName);
+            log.info("Booking confirmation email sent");
         } catch (MessagingException e) {
-            log.error("Failed to send booking confirmation email for event: {}. Reason: {}", eventName, e.getMessage(), e);
+            log.error("Failed to send booking confirmation email - Error type: {}", e.getClass().getSimpleName());
             throw new RuntimeException(e);
         }
     }
@@ -66,7 +74,7 @@ public class EmailService {
             helper.setText("Sei stato invitato a collaborare all’evento " + eventName +" come "+ role + ".\n  Accetta l’invito entro " + expiresAt+".\n Per poter accettare accedi all'app e inserisci il codice: " + token);
             mailSender.send(mimeMessage);
         } catch (MessagingException e) {
-            log.error("Failed to send confirmation email for event: {}. Reason: {}", eventName, e.getMessage(), e);
+            log.error("Failed to send event invitation email - Error type: {}", e.getClass().getSimpleName());
             throw new RuntimeException(e);
 
         }

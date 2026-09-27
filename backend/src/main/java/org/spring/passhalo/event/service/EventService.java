@@ -70,7 +70,7 @@ public class EventService {
         Event newEvent = eventMapper.toEntity(event);
         newEvent.setUser(admin);
         Event savedEvent = eventRepository.save(newEvent);
-        log.info("Event created successfully - ID: {}, Name: '{}', Created by Admin ID: {}", savedEvent.getId(), savedEvent.getName(), admin.getId());
+        log.info("Event created successfully");
         return eventMapper.toResponse(savedEvent);
     }
     @Transactional
@@ -166,7 +166,7 @@ public class EventService {
             throw new EventFinishedException("Cannot register walk-in attendee for a finished event");
         }
         event.setWalkInCount(event.getWalkInCount() + 1);
-        log.info("Walk-in attendee registered for Event ID: {} - New count: {}", eventId, event.getWalkInCount());
+        log.info("Walk-in attendee registered");
         eventRepository.save(event);
     }
 
@@ -228,7 +228,7 @@ public class EventService {
         eventRepository.save(event);
         eventJoinService.expireRequestsForEvent(eventId);
         staffAccessService.expireForEvent(eventId);
-        log.info("Event ID: {} closed by Admin ID: {} - Transitioned to FINISHED", eventId, admin.getId());
+        log.info("Event closed and access credentials expired");
         bookingService.anonymizeBookingsByEventId(eventId);
     }
 

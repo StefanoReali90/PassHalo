@@ -74,6 +74,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/bookings", "/bookings/").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/marketing/unsubscribe").permitAll()
                         .requestMatchers("/staff-access/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/bookings/{uuid}",

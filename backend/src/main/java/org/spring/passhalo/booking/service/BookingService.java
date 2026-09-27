@@ -10,6 +10,7 @@ import org.spring.passhalo.booking.enums.BookingStatus;
 import org.spring.passhalo.booking.exception.*;
 import org.spring.passhalo.booking.mapper.BookingMapper;
 import org.spring.passhalo.booking.repository.BookingRepository;
+import org.spring.passhalo.security.PiiCryptoService;
 import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.enums.EventState;
 import org.spring.passhalo.event.exception.AccessDeniedException;
@@ -26,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -35,6 +38,7 @@ public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
+    private final PiiCryptoService cryptoService;
     private final EventRepository eventRepository;
     private final QrCodeService qrCodeService;
     private final EmailService emailService;
@@ -49,7 +53,12 @@ public class BookingService {
         if (event.getEventState() == EventState.FINISHED) {
             throw new EventFinishedException("Event is finished and no more bookings are allowed");
         }
-        if (bookingRepository.existsByEventIdAndEmailAndBookingStatusNot(bookingRequest.eventId(), bookingRequest.email(), BookingStatus.CANCELLED)) {
+        String emailLookupHash = cryptoService.emailLookupHash(bookingRequest.email());
+        boolean alreadyBooked = bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(
+                bookingRequest.eventId(), emailLookupHash, BookingStatus.CANCELLED)
+                || bookingRepository.existsByEventIdAndEmailIgnoreCaseAndBookingStatusNot(
+                bookingRequest.eventId(), bookingRequest.email().trim(), BookingStatus.CANCELLED);
+        if (alreadyBooked) {
             throw new AlreadyBookedException("Booking already exists for this event and email");
         }
         if (bookingRepository.countByEventIdAndBookingStatusNot(event.getId(), BookingStatus.CANCELLED) >= event.getTotalTickets()) {
@@ -59,11 +68,13 @@ public class BookingService {
         booking.setEvent(event);
         Booking savedBooking = bookingRepository.save(booking);
         String qrCode = qrCodeService.createQrCode(savedBooking.getUuid().toString());
-        emailService.sendBookingConfirmation(savedBooking.getEmail(), savedBooking.getName(), event.getName(), qrCodeService.createQrCodeBytes(savedBooking.getUuid().toString()));
+        String unsubscribeToken = null;
         if (bookingRequest.marketingConsent()) {
-            marketingService.registerConsent(savedBooking.getName(), savedBooking.getSurname(), savedBooking.getEmail());
+            unsubscribeToken = marketingService.registerConsent(bookingRequest.name(), bookingRequest.surname(), bookingRequest.email());
         }
-        log.info("Booking has been created successfully for event: {}, {}, booking: {}, {}", event.getId(), event.getName(), savedBooking.getId(), savedBooking.getUuid());
+        emailService.sendBookingConfirmation(bookingRequest.email(), bookingRequest.name(), event.getName(),
+                qrCodeService.createQrCodeBytes(savedBooking.getUuid().toString()), unsubscribeToken);
+        log.info("Booking has been created successfully");
         return bookingMapper.toResponse(savedBooking, qrCode);
 
     }
@@ -97,7 +108,10 @@ public class BookingService {
 
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByEmail(String email, User admin) {
-        List<Booking> bookings = bookingRepository.findAllByEmailAndEvent_User_Id(email, admin.getId());
+        String emailLookupHash = cryptoService.emailLookupHash(email);
+        List<Booking> bookings = distinctById(
+                bookingRepository.findAllByEmailLookupHashAndEvent_User_Id(emailLookupHash, admin.getId()),
+                bookingRepository.findAllByEmailIgnoreCaseAndEvent_User_Id(email.trim(), admin.getId()));
         return bookings.stream()
                 .map(booking -> bookingMapper.toResponse(booking, qrCodeService.createQrCode(booking.getUuid().toString())))
                 .toList();
@@ -106,7 +120,10 @@ public class BookingService {
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByEventIdAndEmail(Long eventId, String email, User admin) {
         authEventService.checkUserAccess(eventId, admin.getId());
-        List<Booking> bookings = bookingRepository.findAllByEventIdAndEmail(eventId, email);
+        String emailLookupHash = cryptoService.emailLookupHash(email);
+        List<Booking> bookings = distinctById(
+                bookingRepository.findAllByEventIdAndEmailLookupHash(eventId, emailLookupHash),
+                bookingRepository.findAllByEventIdAndEmailIgnoreCase(eventId, email.trim()));
         return bookings.stream()
                 .map(booking -> bookingMapper.toResponse(booking, qrCodeService.createQrCode(booking.getUuid().toString())))
                 .toList();
@@ -169,7 +186,7 @@ public class BookingService {
                 log.info("Check-in successful");
                 return bookingMapper.toCheckInResponse(booking);
             case VALIDATED:
-                log.warn("Check-in rejected was already validated at: {}", booking.getCheckInDateTime());
+                log.warn("Check-in rejected: pass was already validated");
                 throw new AlreadyValidatedException("Booking already validated");
 
 
@@ -186,14 +203,30 @@ public class BookingService {
     public void anonymizeBookingsByEventId(Long eventId) {
         List<Booking> bookings = bookingRepository.findAllByEventId(eventId);
         for (Booking booking : bookings) {
-            booking.setName("ANONYMIZED");
-            booking.setSurname("ANONYMIZED");
-            booking.setEmail("anonimo@example.invalid");
+            booking.setNameCiphertext(null);
+            booking.setSurnameCiphertext(null);
+            booking.setEmailCiphertext(null);
+            booking.setEmailLookupHash(null);
+            booking.setName(null);
+            booking.setSurname(null);
+            booking.setEmail(null);
             booking.setPhone(null);
+            booking.setPhoneCiphertext(null);
             booking.setUuid(UUID.randomUUID());
 
         }
-        log.info("GDPR Anonymization completed for event ID: {} - Total bookings anonymized: {}", eventId, bookings.size());
+        log.info("Booking identifiers replaced after event closure");
+    }
+
+    @SafeVarargs
+    private final List<Booking> distinctById(List<Booking>... groups) {
+        Map<Long, Booking> bookingsById = new LinkedHashMap<>();
+        for (List<Booking> group : groups) {
+            for (Booking booking : group) {
+                bookingsById.putIfAbsent(booking.getId(), booking);
+            }
+        }
+        return List.copyOf(bookingsById.values());
     }
 
 
