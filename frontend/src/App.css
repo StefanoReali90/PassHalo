@@ -2416,6 +2416,66 @@ label,
     }
 }
 
+/* Reusable booking form for external band and event websites */
+.booking-embed {
+    width: min(100%, 720px);
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 12px;
+}
+
+.booking-embed-panel {
+    padding: clamp(18px, 4vw, 32px);
+}
+
+.booking-embed-heading {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+}
+
+.booking-embed-heading h1 {
+    margin: 12px 0 8px;
+    font-size: clamp(24px, 5vw, 36px);
+}
+
+.booking-embed-heading p {
+    margin-bottom: 10px;
+    color: var(--muted);
+}
+
+.booking-embed-credit {
+    margin: 20px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+}
+
+.booking-embed-credit a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.booking-embed-success {
+    text-align: center;
+}
+
+.booking-embed-success .status {
+    justify-content: center;
+}
+
+.booking-embed-success h1 {
+    margin: 18px 0 8px;
+    font-size: clamp(24px, 5vw, 34px);
+}
+
+.booking-embed-success .qr-image {
+    display: block;
+    width: min(220px, 70%);
+    margin: 20px auto;
+}
+
 /* Public event landing */
 .public-event-page {
     min-width: 0;

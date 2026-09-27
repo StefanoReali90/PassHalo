@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowUpRight, CalendarDays, CircleHelp, Edit3, Film, MapPin, Plus, RefreshCw, Trash2, UsersRound, X } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, Check, CircleHelp, Copy, Edit3, Film, MapPin, Plus, RefreshCw, Trash2, UsersRound, X } from 'lucide-react';
 import { createEvent, deleteEvent, getEventById, getMyEvents, updateEvent } from '../api/events';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../context/useAuth';
@@ -81,6 +81,24 @@ export function EventsPage() {
     const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
+    const [copiedEmbedId, setCopiedEmbedId] = useState<number | null>(null);
+
+    const copyEmbedCode = async (event: Event) => {
+        const escapedTitle = event.name.replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        })[character] ?? character);
+        const embedUrl = new URL(`/embed/booking/${event.id}`, window.location.origin).toString();
+        const frameId = `passhalo-booking-${event.id}`;
+        const trustedOrigin = window.location.origin;
+        const code = `<iframe id="${frameId}" src="${embedUrl}" title="Prenotazione: ${escapedTitle}" width="100%" height="860" style="width:100%;min-height:680px;border:0" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>\n<script>(function(){var frame=document.getElementById("${frameId}");var origin="${trustedOrigin}";window.addEventListener("message",function(event){if(event.origin!==origin||event.source!==frame.contentWindow||!event.data||event.data.type!=="passhalo:booking-embed:resize")return;var height=Number(event.data.height);if(Number.isFinite(height)&&height>=360&&height<=1600)frame.style.height=height+"px";});})();</script>`;
+        try {
+            await navigator.clipboard.writeText(code);
+            setCopiedEmbedId(event.id);
+            window.setTimeout(() => setCopiedEmbedId((current) => current === event.id ? null : current), 2500);
+        } catch {
+            window.prompt('Copia e incolla questo codice nel widget HTML di Elementor:', code);
+        }
+    };
 
     const loadEvents = useCallback(async () => {
         setLoading(true);
@@ -243,7 +261,7 @@ export function EventsPage() {
                 <div>
                     <span className="eyebrow">Amministrazione / Eventi</span>
                     <h1>Programma e pubblica<span className="accent-text">.</span></h1>
-                    <p>{canCreate ? 'Crea gli eventi, aggiorna le informazioni e controlla il loro stato.' : 'Aggiorna gli eventi per cui hai il ruolo di amministratore.'}</p>
+                    <p>{canCreate ? 'Crea gli eventi, aggiorna le informazioni e controlla il loro stato. Apri la pagina PassHalo oppure prepara il modulo di prenotazione da inserire nel sito della band.' : 'Aggiorna gli eventi per cui hai il ruolo di amministratore.'}</p>
                 </div>
                 <button className="button" onClick={() => void loadEvents()} disabled={loading}>
                     <RefreshCw size={16} className={loading ? 'spinning' : ''} /> Aggiorna
@@ -345,6 +363,7 @@ export function EventsPage() {
                                     <span>{event.totalTickets.toLocaleString('it-IT')} posti · {event.bookingPrice.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}</span>
                                     <div>
                                         <a className="button" href={`/prenota?eventId=${event.id}`} target="_blank" rel="noreferrer"><ArrowUpRight size={15} /> Pagina</a>
+                                        <button className="button" onClick={() => void copyEmbedCode(event)}>{copiedEmbedId === event.id ? <Check size={15} /> : <Copy size={15} />}{copiedEmbedId === event.id ? 'Codice copiato' : 'Incorpora modulo'}</button>
                                         <Link className="button" to={`/admin/events/${event.id}/team`}><UsersRound size={15} /> Collaboratori</Link>
                                         <button className="button" disabled={loadingEditor || event.eventState === 'FINISHED'} onClick={() => void edit(event.id)}><Edit3 size={15} /> Modifica</button>
                                         <button className="button danger" disabled={deletingId === event.id || event.eventState === 'FINISHED'} onClick={() => setEventToDelete(event)}><Trash2 size={15} /> Elimina</button>

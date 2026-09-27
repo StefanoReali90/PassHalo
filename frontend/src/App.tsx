@@ -10,6 +10,7 @@ import './App.css';
 const AccountPage = lazy(() => import('./pages/AccountPage').then((module) => ({ default: module.AccountPage })));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })));
 const BookingPage = lazy(() => import('./pages/BookingPage').then((module) => ({ default: module.BookingPage })));
+const BookingEmbedPage = lazy(() => import('./pages/BookingEmbedPage').then((module) => ({ default: module.BookingEmbedPage })));
 const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage').then((module) => ({ default: module.CollaborationsPage })));
 const BookingsPage = lazy(() => import('./pages/BookingsPage').then((module) => ({ default: module.BookingsPage })));
 const EventsPage = lazy(() => import('./pages/EventsPage').then((module) => ({ default: module.EventsPage })));
@@ -32,6 +33,7 @@ const pageTitles: Array<[string, string]> = [
     ['/staff/access', 'Accesso staff'],
     ['/account', 'Sicurezza account'],
     ['/prenota', 'Prenota il tuo ingresso'],
+    ['/embed/booking', 'Modulo prenotazione'],
     ['/privacy', 'Privacy'],
     ['/marketing/unsubscribe', 'Revoca consenso marketing'],
     ['/register', 'Registrazione organizzatore'],
@@ -57,6 +59,12 @@ function AppLayout() {
 
 function PublicBookingLayout() {
     return <><header className="topbar"><Brand /></header><main id="main-content"><Outlet /></main></>;
+}
+
+function AppFooter() {
+    const { pathname } = useLocation();
+    if (pathname.startsWith('/embed/')) return null;
+    return <footer className="site-footer"><span>PassHalo</span><span>Il tuo evento, dall’inizio all’ingresso.</span><Link to="/privacy">Privacy</Link></footer>;
 }
 
 function RouteFallback() {
@@ -89,6 +97,8 @@ export default function App() {
                                     <Route path="/admin/bookings" element={<ProtectedRoute eventAdmin><BookingsPage /></ProtectedRoute>} />
                                 </Route>
 
+                                <Route path="/embed/booking/:eventId" element={<BookingEmbedPage />} />
+
                                 <Route element={<PublicBookingLayout />}>
                                     <Route path="/staff/access" element={<StaffAccessPage />} />
                                     <Route path="/prenota" element={<BookingPage />} />
@@ -99,7 +109,7 @@ export default function App() {
                                 </Route>
                             </Routes>
                         </Suspense>
-                        <footer className="site-footer"><span>PassHalo</span><span>Il tuo evento, dall’inizio all’ingresso.</span><Link to="/privacy">Privacy</Link></footer>
+                        <AppFooter />
                     </div>
                 </AuthProvider>
             </BrowserRouter>
