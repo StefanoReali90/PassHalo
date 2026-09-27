@@ -22,7 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -81,21 +80,10 @@ public class UserService {
         return userMapper.toResponse(user);
     }
 
-    @Transactional(readOnly = true)
-    public UserResponse getUserById(Long id) {
-        User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not found"));
-        return userMapper.toResponse(user);
-    }
-
-    @Transactional(readOnly = true)
-    public List<UserResponse> getAllUsers() {
-        List<User> users = userRepository.findAll();
-        return users.stream().map(userMapper::toResponse).toList();
-    }
-
     @Transactional
-    public void changePassword(ChangePasswordRequest request, Long id) {
-        User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public void changePassword(ChangePasswordRequest request, String authenticatedEmail) {
+        User user = userRepository.findByEmailIgnoreCase(authenticatedEmail)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
         if (!request.newPassword().equals(request.confirmationPassword())) {
             throw new InvalidPasswordException("New password and confirmation password do not match");
         }
@@ -142,12 +130,6 @@ public class UserService {
         user.setResetPasswordToken(null);
         user.setResetPasswordTokenExpiry(null);
         userRepository.save(user);
-    }
-
-    @Transactional
-    public void deleteUser(Long id) {
-        User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not found"));
-        userRepository.delete(user);
     }
 
     public LoginResponse login(@Valid LoginRequest request) {

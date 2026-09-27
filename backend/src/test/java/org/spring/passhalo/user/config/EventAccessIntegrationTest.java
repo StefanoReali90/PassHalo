@@ -17,6 +17,7 @@ import org.spring.passhalo.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -102,6 +105,33 @@ class EventAccessIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/bookings/events/{eventId}", event.getId()).with(user(otherAdmin)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void globalAdminCannotManageAnotherOwnersEventWithoutMembership() throws Exception {
+        User owner = saveUser("owner-edit@example.test", Role.ADMIN);
+        User otherAdmin = saveUser("other-edit@example.test", Role.ADMIN);
+        Event event = saveEvent(owner);
+        String update = """
+                {"name":"Changed","description":"Other event","location":"Test venue",
+                 "start":"%s","end":"%s","imageUrl":"https://example.test/event.jpg",
+                 "totalTickets":100,"normalPrice":15,"bookingPrice":10}
+                """.formatted(event.getStartDateTime(), event.getEndDateTime());
+
+        mockMvc.perform(get("/events/my-events").with(user(otherAdmin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+        mockMvc.perform(put("/events/{id}", event.getId()).with(user(otherAdmin))
+                        .contentType(MediaType.APPLICATION_JSON).content(update))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/events/{id}", event.getId()).with(user(otherAdmin)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/events/{id}/walk-in", event.getId()).with(user(otherAdmin)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/events/{id}/close", event.getId()).with(user(otherAdmin)))
+                .andExpect(status().isForbidden());
+        assertEquals("Test event", event.getName());
+        assertEquals(EventState.WAITING, event.getEventState());
     }
 
     @Test

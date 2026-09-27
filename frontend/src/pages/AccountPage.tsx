@@ -13,7 +13,6 @@ export function AccountPage() {
         event.preventDefault();
         const form = event.currentTarget;
         const data = new FormData(form);
-        const userId = Number(data.get('userId'));
         const newPassword = String(data.get('newPassword'));
         const confirmationPassword = String(data.get('confirmationPassword'));
 
@@ -26,7 +25,7 @@ export function AccountPage() {
         setError('');
         setMessage('');
         try {
-            await changePassword(userId, {
+            await changePassword({
                 oldPassword: String(data.get('oldPassword')),
                 newPassword,
                 confirmationPassword,
@@ -60,11 +59,9 @@ export function AccountPage() {
 
                 <article className="panel editor-panel">
                     <div className="panel-heading"><div><span className="eyebrow">Credenziali</span><h2>Cambia password</h2></div><KeyRound size={21} /></div>
-                    <p className="contract-note">Il contratto API richiede l’ID numerico dell’account, ma il profilo corrente non lo restituisce. Inserisci qui il tuo ID interno.</p>
                     {error && <div className="notice error" role="alert">{error}</div>}
                     {message && <div className="notice success" role="status">{message}</div>}
                     <form className="management-form" onSubmit={submit}>
-                        <label>ID account<input name="userId" type="number" inputMode="numeric" min="1" step="1" required /></label>
                         <label>Password attuale<input name="oldPassword" type="password" autoComplete="current-password" required /></label>
                         <label>Nuova password<input name="newPassword" type="password" autoComplete="new-password" minLength={8} maxLength={100} required /></label>
                         <label>Conferma nuova password<input name="confirmationPassword" type="password" autoComplete="new-password" minLength={8} maxLength={100} required /></label>
