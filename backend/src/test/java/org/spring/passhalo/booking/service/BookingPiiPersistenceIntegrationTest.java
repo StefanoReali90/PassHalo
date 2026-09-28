@@ -83,7 +83,9 @@ class BookingPiiPersistenceIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void marketingConsentPersistsNoPlaintextAndKeepsOnlyAnEmailLookupHash() throws Exception {
-        String unsubscribeToken = marketingService.registerConsent("Ada", "Lovelace", "ada-marketing@example.test");
+        Event event = saveEvent();
+        String unsubscribeToken = marketingService.registerConsent(event.getUser(), event.getId(),
+                "Ada", "Lovelace", "ada-marketing@example.test");
 
         Map<String, Object> row = jdbcTemplate.queryForMap(
                 "SELECT name, surname, email, name_ciphertext, surname_ciphertext, email_ciphertext, " +
@@ -119,6 +121,27 @@ class BookingPiiPersistenceIntegrationTest {
 
         assertEquals(false, marketingRepository.existsById(expiredId));
         assertEquals(true, marketingRepository.existsById(currentId));
+    }
+
+    @Test
+    void sameEmailCanConsentForTwoOrganizersAndRevokeOnlyOne() {
+        Event firstEvent = saveEvent();
+        Event secondEvent = saveEvent();
+        User firstOwner = firstEvent.getUser();
+        User secondOwner = secondEvent.getUser();
+        String firstToken = marketingService.registerConsent(firstOwner, firstEvent.getId(),
+                "Ada", "Lovelace", "shared@example.test");
+        marketingService.registerConsent(secondOwner, secondEvent.getId(),
+                "Ada", "Lovelace", "shared@example.test");
+
+        String hash = cryptoService.emailLookupHash("shared@example.test");
+        assertEquals(1, marketingRepository.findAllByOwnerIdAndEmailLookupHash(firstOwner.getId(), hash).size());
+        assertEquals(1, marketingRepository.findAllByOwnerIdAndEmailLookupHash(secondOwner.getId(), hash).size());
+
+        marketingService.unsubscribe(firstToken);
+
+        assertEquals(0, marketingRepository.findAllByOwnerIdAndEmailLookupHash(firstOwner.getId(), hash).size());
+        assertEquals(1, marketingRepository.findAllByOwnerIdAndEmailLookupHash(secondOwner.getId(), hash).size());
     }
 
     private MarketingSubscriber subscriberWithExpiry(LocalDateTime expiry, String hash) {

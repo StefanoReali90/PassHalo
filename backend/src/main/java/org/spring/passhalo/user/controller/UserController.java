@@ -1,6 +1,7 @@
 package org.spring.passhalo.user.controller;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.user.dto.*;
 import org.spring.passhalo.user.service.UserService;
@@ -10,6 +11,9 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Value;
+
+import java.time.Duration;
 
 @RestController
 @RequestMapping("/user")
@@ -17,6 +21,9 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+
+    @Value("${application.security.jwt.expiration-time}")
+    private long jwtExpirationMillis;
 
 
     @PostMapping(path = "/register", consumes = "application/json", produces = "application/json")
@@ -44,12 +51,15 @@ public class UserController {
     }
 
     @PostMapping(path = "/login", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
+                                               HttpServletRequest httpRequest) {
         LoginResponse response = userService.login(request);
         ResponseCookie cookie = ResponseCookie.from("jwt", response.token())
                 .httpOnly(true)
+                .secure(httpRequest.isSecure())
+                .sameSite("Strict")
                 .path("/")
-                .maxAge(24 * 60 * 60) // 1 day
+                .maxAge(Duration.ofMillis(jwtExpirationMillis))
                 .build();
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -57,9 +67,11 @@ public class UserController {
     }
 
     @PostMapping(path="/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
         ResponseCookie cookie = ResponseCookie.from("jwt", "")
                 .httpOnly(true)
+                .secure(httpRequest.isSecure())
+                .sameSite("Strict")
                 .path("/")
                 .maxAge(0)
                 .build();

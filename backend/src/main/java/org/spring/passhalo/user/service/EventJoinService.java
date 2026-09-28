@@ -187,6 +187,14 @@ public class EventJoinService {
     }
 
     @Transactional
+    public void deleteForEvent(Long eventId) {
+        joinRequestRepository.deleteAll(joinRequestRepository.findAllByEventId(eventId));
+        joinRequestRepository.flush();
+        joinCodeRepository.deleteAll(joinCodeRepository.findAllByEventId(eventId));
+        joinCodeRepository.flush();
+    }
+
+    @Transactional
     @Scheduled(cron = "0 0 * * * *", zone = "${app.time-zone}")
     public void expireEndedRequests() {
         LocalDateTime now = now();

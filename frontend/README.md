@@ -2,6 +2,8 @@
 
 Frontend React + TypeScript per prenotazioni pubbliche, amministrazione eventi e check-in.
 
+Per il VPS Ubuntu e gli aggiornamenti automatici dopo le pull request, segui la [guida al deploy](../deploy/README.md).
+
 ## Avvio locale
 
 ```bash

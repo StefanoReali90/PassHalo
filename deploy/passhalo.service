@@ -1,0 +1,22 @@
+[Unit]
+Description=PassHalo Spring Boot API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=passhalo
+Group=passhalo
+WorkingDirectory=/opt/passhalo
+EnvironmentFile=/etc/passhalo/passhalo.env
+ExecStart=/usr/bin/java -Xms256m -Xmx1536m -jar /opt/passhalo/current/backend.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/passhalo/logs
+
+[Install]
+WantedBy=multi-user.target

@@ -7,12 +7,43 @@ import type {
   EventDashboardResponse,
   EventRequest,
   LoginResponse,
+  MyEvent,
   User,
 } from '../types';
 
 const segment = (value: string) => encodeURIComponent(value.trim());
 
+export interface BrevoStatus {
+  connected: boolean;
+  listId: number | null;
+  pendingContacts: number;
+}
+
 export const api = {
+  brevoStatus() {
+    return apiFetch<BrevoStatus>('/marketing/brevo');
+  },
+
+  connectBrevo(apiKey: string, listId: number) {
+    return apiFetch<BrevoStatus>('/marketing/brevo', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey, listId }),
+      timeoutMs: 25_000,
+    });
+  },
+
+  rotateBrevoKey(apiKey: string) {
+    return apiFetch<BrevoStatus>('/marketing/brevo', {
+      method: 'PUT',
+      body: JSON.stringify({ apiKey }),
+      timeoutMs: 25_000,
+    });
+  },
+
+  disconnectBrevo() {
+    return apiFetch<void>('/marketing/brevo', { method: 'DELETE', timeoutMs: 60_000 });
+  },
+
   login(email: string, password: string) {
     return apiFetch<LoginResponse>('/user/login', {
       method: 'POST',
@@ -36,7 +67,7 @@ export const api = {
   },
 
   myEvents() {
-    return apiFetch<PassHaloEvent[]>('/events/my-events');
+    return apiFetch<MyEvent[]>('/events/my-events');
   },
 
   createEvent(data: EventRequest) {
@@ -68,16 +99,20 @@ export const api = {
     });
   },
 
-  bookings() {
-    return apiFetch<BookingResponse[]>('/bookings/');
+  async bookings() {
+    const events = (await api.myEvents()).filter((event) => event.role === 'EVENT_ADMIN');
+    const groups = await Promise.all(events.map((event) =>
+      apiFetch<BookingResponse[]>(`/bookings/events/${event.id}`),
+    ));
+    return groups.flat();
   },
 
   cancelBooking(uuid: string) {
     return apiFetch<void>(`/bookings/${segment(uuid)}`, { method: 'DELETE' });
   },
 
-  checkIn(uuid: string) {
-    return apiFetch<CheckInResponse>(`/bookings/check-in/${segment(uuid)}`, { method: 'PATCH' });
+  checkIn(uuid: string, eventId: number) {
+    return apiFetch<CheckInResponse>(`/bookings/events/${eventId}/check-in/${segment(uuid)}`, { method: 'PATCH' });
   },
 
   incrementWalkIn(eventId: number) {

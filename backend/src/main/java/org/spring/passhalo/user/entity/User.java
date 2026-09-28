@@ -43,6 +43,7 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role;
 
+    // Stores only SHA-256 of the emailed reset token.
     @Column(nullable = true)
     private String resetPasswordToken;
 

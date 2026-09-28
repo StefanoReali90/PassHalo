@@ -88,7 +88,7 @@ export async function apiFetch<T>(endpoint: string, options: ApiOptions = {}): P
     if (error instanceof Error && error.name === 'AbortError') {
       throw new ApiError('Il server sta impiegando troppo tempo a rispondere.');
     }
-    throw new ApiError('Server PassHalo non raggiungibile. Controlla il tunnel e la connessione.');
+    throw new ApiError('Server PassHalo non raggiungibile. Controlla l’indirizzo e la connessione.');
   } finally {
     clearTimeout(timeout);
   }

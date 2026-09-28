@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { createBooking } from '../api/booking';
 import { getEventById } from '../api/events';
 import type { BookingResponse, Event } from '../types';
+import { isEventBookable } from '../utils/eventAvailability';
 
 function formatEventDate(value: string) {
     return new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -33,7 +34,7 @@ export function BookingEmbedPage() {
         getEventById(eventId)
             .then((loadedEvent) => {
                 if (!active) return;
-                if (loadedEvent.eventState === 'FINISHED') {
+                if (!isEventBookable(loadedEvent)) {
                     setError('Le prenotazioni per questo evento sono chiuse.');
                 } else {
                     setEvent(loadedEvent);
@@ -70,6 +71,10 @@ export function BookingEmbedPage() {
     async function submit(formEvent: FormEvent<HTMLFormElement>) {
         formEvent.preventDefault();
         if (!event) return;
+        if (!isEventBookable(event)) {
+            setError('Le prenotazioni per questo evento sono chiuse.');
+            return;
+        }
         const form = new FormData(formEvent.currentTarget);
         setBusy(true);
         setError('');
@@ -98,7 +103,7 @@ export function BookingEmbedPage() {
                     <h1>Il tuo pass per {result.eventName}</h1>
                     <p>{result.name} {result.surname}<br />{result.email}</p>
                     <img className="qr-image" src={qr} alt="QR code personale per l’ingresso" />
-                    <p className="form-note">Mostra questo codice all’ingresso. Ti abbiamo inviato una copia anche via email.</p>
+                    <p className="form-note">Mostra questo codice all’ingresso. Scaricalo ora e conservalo anche se l’email non arriva.</p>
                     <a className="button primary full" href={qr} download={`PassHalo-${result.uuid}.png`}>
                         <Download size={17} /> Scarica il QR code
                     </a>
@@ -135,13 +140,13 @@ export function BookingEmbedPage() {
                     <label>Telefono <span className="optional-label">Facoltativo</span><input name="phone" type="tel" autoComplete="tel" maxLength={40} /></label>
                     <label className="checkbox-label required-consent">
                         <input name="privacyAcknowledgement" type="checkbox" required />
-                        <span>Ho letto l’<Link className="text-link" to="/privacy" target="_blank" rel="noreferrer">informativa privacy</Link>. <small>Obbligatorio</small></span>
+                        <span>Ho letto l’<Link className="text-link" to={`/privacy?eventId=${event.id}`} target="_blank" rel="noreferrer">informativa privacy</Link>. <small>Obbligatorio</small></span>
                     </label>
                     <label className="checkbox-label">
                         <input name="marketingConsent" type="checkbox" />
-                        <span>Desidero ricevere aggiornamenti sui prossimi eventi. <small>Facoltativo</small></span>
+                        <span>Desidero ricevere via email aggiornamenti sui prossimi eventi di {event.organizerName}. <small>Facoltativo</small></span>
                     </label>
-                    <p className="form-note">Riceverai il QR code personale via email.</p>
+                    <p className="form-note">Il QR appare subito dopo la conferma: scaricalo e conservalo.</p>
                     <button className="button primary full" disabled={busy || loading}>
                         {busy ? 'Creazione del pass…' : 'Prenota'} <ArrowRight size={17} />
                     </button>

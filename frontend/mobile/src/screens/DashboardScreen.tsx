@@ -27,10 +27,10 @@ export function DashboardScreen() {
     setLoading(true);
     setError('');
     try {
-      const ownedEvents = await api.myEvents();
-      setEvents(ownedEvents);
+      const managedEvents = (await api.myEvents()).filter((event) => event.role === 'EVENT_ADMIN');
+      setEvents(managedEvents);
       const currentId = selectedIdRef.current;
-      const nextId = ownedEvents.some((event) => event.id === currentId) ? currentId : ownedEvents[0]?.id ?? null;
+      const nextId = managedEvents.some((event) => event.id === currentId) ? currentId : managedEvents[0]?.id ?? null;
       selectedIdRef.current = nextId;
       setSelectedId(nextId);
       if (nextId !== null) await loadDashboard(nextId);

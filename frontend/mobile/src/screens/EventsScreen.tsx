@@ -54,8 +54,9 @@ function localDateTime(value: Date) {
 const dateLabel = (value: Date) => value.toLocaleDateString('it-IT', { dateStyle: 'medium' });
 const timeLabel = (value: Date) => value.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 const money = (value: number) => value.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+const stateLabels = { WAITING: 'In attesa', IN_PROGRESS: 'In corso', FINISHED: 'Concluso' };
 
-export function EventsScreen() {
+export function EventsScreen({ canCreateEvent }: { canCreateEvent: boolean }) {
   const [events, setEvents] = useState<PassHaloEvent[]>([]);
   const [editing, setEditing] = useState<PassHaloEvent | null>(null);
   const [draft, setDraft] = useState<EventDraft>(freshDraft);
@@ -70,7 +71,7 @@ export function EventsScreen() {
     setLoading(true);
     setError('');
     try {
-      setEvents(await api.myEvents());
+      setEvents((await api.myEvents()).filter((event) => event.role === 'EVENT_ADMIN'));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Eventi non disponibili.');
     } finally {
@@ -189,7 +190,7 @@ export function EventsScreen() {
   if (formOpen) {
     return (
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <PageHeader eyebrow={editing ? 'Modifica evento' : 'Nuovo evento'} title={editing ? editing.name : 'Pubblica un evento.'} description="L’evento sarà associato esclusivamente al tuo account ADMIN." />
+        <PageHeader eyebrow={editing ? 'Modifica evento' : 'Nuovo evento'} title={editing ? editing.name : 'Pubblica un evento.'} description={editing ? 'Aggiorna le informazioni dell’evento.' : 'Il nuovo evento sarà associato al tuo account.'} />
         {error ? <Notice tone="error">{error}</Notice> : null}
         <Card>
           <Field label="Nome" value={draft.name} onChangeText={(value) => update('name', value)} />
@@ -224,11 +225,11 @@ export function EventsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.accent} />}>
-      <PageHeader eyebrow="Workspace" title="I tuoi eventi." description="Qui compaiono esclusivamente gli eventi creati dal tuo account." action={<Pressable onPress={openCreate} style={styles.addButton}><Plus color={colors.accentDark} size={22} /></Pressable>} />
+      <PageHeader eyebrow="Workspace" title="I tuoi eventi." description="Eventi di tua proprietà o assegnati come amministratore." action={canCreateEvent ? <Pressable onPress={openCreate} style={styles.addButton}><Plus color={colors.accentDark} size={22} /></Pressable> : undefined} />
       {error ? <Notice tone="error">{error}</Notice> : null}
       {message ? <Notice tone="success">{message}</Notice> : null}
       {loading && events.length === 0 ? <LoadingBlock label="Caricamento eventi…" /> : null}
-      {!loading && events.length === 0 ? <Notice>Non hai ancora creato eventi. Premi il pulsante + per iniziare.</Notice> : null}
+      {!loading && events.length === 0 ? <Notice>{canCreateEvent ? 'Non hai ancora creato eventi. Premi il pulsante + per iniziare.' : 'Non hai eventi assegnati come amministratore.'}</Notice> : null}
 
       {events.map((event) => (
         <Card key={event.id}>
@@ -236,7 +237,7 @@ export function EventsScreen() {
           <View style={styles.titleRow}>
             <View style={styles.titleCopy}>
               <Text style={styles.eventName}>{event.name}</Text>
-              <Text style={styles.state}>{event.eventState}</Text>
+              <Text style={styles.state}>{stateLabels[event.eventState]}</Text>
             </View>
             <Text style={styles.price}>{money(event.bookingPrice)}</Text>
           </View>
@@ -245,7 +246,7 @@ export function EventsScreen() {
           <Text numberOfLines={3} style={styles.description}>{event.description}</Text>
           <View style={styles.actions}>
             <View style={styles.action}><Button compact label="Modifica" variant="secondary" disabled={event.eventState === 'FINISHED'} onPress={() => openEdit(event)} /></View>
-            <View style={styles.action}><Button compact label="Elimina" variant="danger" onPress={() => askDelete(event)} /></View>
+            <View style={styles.action}><Button compact label="Elimina" variant="danger" disabled={event.eventState === 'FINISHED'} onPress={() => askDelete(event)} /></View>
           </View>
         </Card>
       ))}

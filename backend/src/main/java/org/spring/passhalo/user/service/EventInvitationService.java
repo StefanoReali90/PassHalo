@@ -1,7 +1,9 @@
 package org.spring.passhalo.user.service;
 
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.event.entity.Event;
+import org.spring.passhalo.event.enums.EventState;
 import org.spring.passhalo.event.exception.EventNotFoundException;
 import org.spring.passhalo.event.repository.EventRepository;
 import org.spring.passhalo.notification.service.EmailService;
@@ -44,6 +46,7 @@ public class EventInvitationService {
     private final EmailService emailService;
     private final EventMembershipRepository eventMembershipRepository;
     private final AuthEventService authEventService;
+    private final EntityManager entityManager;
 
     @Transactional
     public EventInvitationResponse createInvitation(Long eventId, String inviteEmail, EventRole role, User admin) throws NoSuchAlgorithmException {
@@ -53,8 +56,9 @@ public class EventInvitationService {
         }
         authEventService.checkUserAccess(eventId, admin.getId());
         String cleanedEmail = inviteEmail.trim().toLowerCase(Locale.ROOT);
-        Event event = eventRepository.findById(eventId).orElseThrow(() -> new EventNotFoundException("Event not found"));
+        Event event = eventRepository.findDistinctById(eventId).orElseThrow(() -> new EventNotFoundException("Event not found"));
         LocalDateTime now = LocalDateTime.now(ZoneId.of(timeZone));
+        requireOpenEvent(event, now);
         boolean invitationAlreadyExists = eventInvitationRepository.existsByEventIdAndRecipientEmailAndInviteStateAndExpiresAtAfter(eventId, cleanedEmail, InviteState.PENDING, now);
         if (invitationAlreadyExists) {
             throw new InvitationAlreadyExistsException("Invitation already exists");
@@ -108,6 +112,9 @@ public class EventInvitationService {
         byte[] hash = sha256.digest(token.getBytes(StandardCharsets.UTF_8));
         String hashString = Base64.getEncoder().encodeToString(hash);
         EventInvitation invitation = eventInvitationRepository.findByTokenHash(hashString).orElseThrow(() -> new InvalidInvitationException("Not valid token"));
+        eventRepository.findDistinctById(invitation.getEvent().getId())
+                .orElseThrow(() -> new EventNotFoundException("Event not found"));
+        entityManager.refresh(invitation);
         LocalDateTime now = LocalDateTime.now(ZoneId.of(timeZone));
         if (invitation.getInviteState() != InviteState.PENDING) {
             throw new InvalidInvitationException("Invitation is not pending");
@@ -115,6 +122,7 @@ public class EventInvitationService {
         if (!invitation.getExpiresAt().isAfter(now)) {
             throw new InvalidInvitationException("Invitation expired");
         }
+        requireOpenEvent(invitation.getEvent(), now);
 
         if (!invitation.getRecipientEmail().trim().equalsIgnoreCase(user.getEmail().trim())) {
             throw new InvalidInvitationException("Invitation does not belong to this user");
@@ -174,6 +182,8 @@ public class EventInvitationService {
     @Transactional
     public void revokeInvitation(Long invitationId, Long eventId, User admin) {
         authEventService.checkUserAccess(eventId, admin.getId());
+        eventRepository.findDistinctById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event not found"));
         EventInvitation invitation = eventInvitationRepository.findByIdAndEventId(invitationId, eventId).orElseThrow(() -> new InvalidInvitationException("Invitation not found"));
         if (invitation.getInviteState() != InviteState.PENDING) {
             throw new InvalidInvitationException("Invitation is not pending");
@@ -181,6 +191,27 @@ public class EventInvitationService {
         invitation.setInviteState(InviteState.REVOKED);
         invitation.setRevokedAt(LocalDateTime.now(ZoneId.of(timeZone)));
         eventInvitationRepository.save(invitation);
+    }
+
+    @Transactional
+    public void revokePendingForEvent(Long eventId) {
+        LocalDateTime now = LocalDateTime.now(ZoneId.of(timeZone));
+        for (EventInvitation invitation : eventInvitationRepository.findAllByEventIdAndInviteState(eventId, InviteState.PENDING)) {
+            invitation.setInviteState(InviteState.REVOKED);
+            invitation.setRevokedAt(now);
+        }
+    }
+
+    @Transactional
+    public void deleteForEvent(Long eventId) {
+        eventInvitationRepository.deleteAll(eventInvitationRepository.findAllByEventId(eventId));
+        eventInvitationRepository.flush();
+    }
+
+    private void requireOpenEvent(Event event, LocalDateTime now) {
+        if (event.getEventState() == EventState.FINISHED || !now.isBefore(event.getEndDateTime())) {
+            throw new InvalidInvitationException("L'evento è terminato.");
+        }
     }
 
     private EventInvitationResponse toResponse(EventInvitation invitation) {

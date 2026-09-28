@@ -34,8 +34,8 @@ export function getBookings(): Promise<BookingResponse[]> {
     return apiFetch<BookingResponse[]>('/bookings/');
 }
 
-export function checkInBooking(uuid: string): Promise<CheckInResponse> {
-    return apiFetch<CheckInResponse>(`/bookings/check-in/${segment(uuid)}`, { method: 'PATCH' });
+export function checkInBooking(uuid: string, eventId: number): Promise<CheckInResponse> {
+    return apiFetch<CheckInResponse>(`/bookings/events/${eventId}/check-in/${segment(uuid)}`, { method: 'PATCH' });
 }
 
 export function cancelBooking(uuid: string): Promise<void> {

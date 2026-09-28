@@ -6,10 +6,12 @@ App React Native/Expo per Android con:
 - registrazione autonoma ADMIN senza codice condiviso;
 - login ADMIN/STAFF con JWT conservato in SecureStore;
 - scanner QR nativo e check-in;
-- creazione e modifica dei propri eventi;
-- dashboard limitata agli eventi dell'ADMIN autenticato;
-- elenco e annullamento delle prenotazioni dei propri eventi;
+- creazione degli eventi per gli account ADMIN e gestione degli eventi per cui si ha il ruolo EVENT_ADMIN;
+- dashboard e prenotazioni limitate agli eventi gestiti come proprietario o EVENT_ADMIN;
+- scanner disponibile soltanto per gli eventi assegnati allo staff;
 - URL del server modificabile direttamente dall'app.
+
+Per preparare il VPS e gli aggiornamenti automatici del backend/web, vedi la [guida al deploy](../../deploy/README.md). Il profilo APK `preview` in `eas.json` usa `https://passhalo.it/api`; il file `.env` serve allo sviluppo locale.
 
 ## Avvio locale
 

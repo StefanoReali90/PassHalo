@@ -12,7 +12,9 @@ import org.spring.passhalo.event.dto.EventRequest;
 import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.enums.EventState;
 import org.spring.passhalo.event.exception.AccessDeniedException;
+import org.spring.passhalo.event.exception.EventDeletionException;
 import org.spring.passhalo.event.exception.InvalidDateException;
+import org.spring.passhalo.event.exception.InvalidCapacityException;
 import org.spring.passhalo.event.exception.InvalidPriceException;
 import org.spring.passhalo.event.mapper.EventMapper;
 import org.spring.passhalo.event.repository.EventRepository;
@@ -20,6 +22,7 @@ import org.spring.passhalo.user.entity.User;
 import org.spring.passhalo.user.repository.EventMembershipRepository;
 import org.spring.passhalo.user.service.AuthEventService;
 import org.spring.passhalo.user.service.EventJoinService;
+import org.spring.passhalo.user.service.EventInvitationService;
 import org.spring.passhalo.user.service.StaffAccessService;
 
 import java.time.LocalDateTime;
@@ -41,6 +44,7 @@ class EventServiceTest {
     @Mock private AuthEventService authEventService;
     @Mock private EventMembershipRepository membershipRepository;
     @Mock private EventJoinService eventJoinService;
+    @Mock private EventInvitationService eventInvitationService;
     @Mock private StaffAccessService staffAccessService;
     @InjectMocks private EventService service;
 
@@ -70,13 +74,14 @@ class EventServiceTest {
     void closingEventExpiresRequestsAndAnonymizesBookings() {
         User owner = owner();
         Event event = event(owner);
-        when(eventRepository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(eventRepository.findDistinctById(event.getId())).thenReturn(Optional.of(event));
 
         service.closeEvent(event.getId(), owner);
 
         verify(authEventService).checkUserAccess(event.getId(), owner.getId());
         verify(eventRepository).save(event);
         verify(eventJoinService).expireRequestsForEvent(event.getId());
+        verify(eventInvitationService).revokePendingForEvent(event.getId());
         verify(staffAccessService).expireForEvent(event.getId());
         verify(bookingService).anonymizeBookingsByEventId(event.getId());
         assertEquals(EventState.FINISHED, event.getEventState());
@@ -86,7 +91,7 @@ class EventServiceTest {
     void unauthorizedUserCannotCloseOrCleanUpEvent() {
         User owner = owner();
         Event event = event(owner);
-        when(eventRepository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(eventRepository.findDistinctById(event.getId())).thenReturn(Optional.of(event));
         doThrow(new AccessDeniedException("denied"))
                 .when(authEventService).checkUserAccess(event.getId(), owner.getId());
 
@@ -100,11 +105,37 @@ class EventServiceTest {
         User owner = owner();
         Event event = event(owner);
         event.setEventState(EventState.FINISHED);
-        when(eventRepository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(eventRepository.findDistinctById(event.getId())).thenReturn(Optional.of(event));
 
         assertThrows(EventFinishedException.class, () -> service.closeEvent(event.getId(), owner));
 
         verifyNoInteractions(eventJoinService, bookingService);
+    }
+
+    @Test
+    void eventWithBookingsCannotBeDeleted() {
+        User owner = owner();
+        Event event = event(owner);
+        when(eventRepository.findDistinctById(event.getId())).thenReturn(Optional.of(event));
+        when(bookingRepository.countByEventId(event.getId())).thenReturn(1L);
+
+        assertThrows(EventDeletionException.class, () -> service.deleteEventById(event.getId(), owner));
+
+        verifyNoInteractions(staffAccessService, eventJoinService, eventInvitationService);
+    }
+
+    @Test
+    void capacityCannotBeReducedBelowCurrentBookings() {
+        User owner = owner();
+        Event event = event(owner);
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        EventRequest request = new EventRequest("Test event", "Description", "Venue", start,
+                start.plusHours(4), "https://example.test/image.jpg", 3, 15.0, 10.0, null, null);
+        when(eventRepository.findDistinctById(event.getId())).thenReturn(Optional.of(event));
+        when(bookingRepository.countByEventIdAndBookingStatusNot(event.getId(), org.spring.passhalo.booking.enums.BookingStatus.CANCELLED))
+                .thenReturn(4L);
+
+        assertThrows(InvalidCapacityException.class, () -> service.updateEvent(request, event.getId(), owner));
     }
 
     private User owner() {

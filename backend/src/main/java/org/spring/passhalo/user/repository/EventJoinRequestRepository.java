@@ -23,6 +23,7 @@ public interface EventJoinRequestRepository extends JpaRepository<EventJoinReque
     List<EventJoinRequest> findAllByEventIdAndStateOrderByCreatedAtAsc(Long eventId, JoinRequestState state);
 
     List<EventJoinRequest> findAllByRequesterIdOrderByCreatedAtDesc(Long requesterId);
+    List<EventJoinRequest> findAllByEventId(Long eventId);
 
     @Query("select r from EventJoinRequest r where r.state = :state and r.event.endDateTime <= :now")
     List<EventJoinRequest> findAllEndedByState(JoinRequestState state, LocalDateTime now);

@@ -5,6 +5,7 @@ import { createBooking } from '../api/booking';
 import { getEvents } from '../api/events';
 import { EventHeroMedia } from '../components/EventHeroMedia';
 import type { BookingResponse, Event, EventFaq } from '../types';
+import { isEventBookable } from '../utils/eventAvailability';
 
 function formatEventDate(value: string) {
     return new Intl.DateTimeFormat('it-IT', {
@@ -85,7 +86,7 @@ export function BookingPage() {
         getEvents()
             .then((availableEvents) => {
                 if (!active) return;
-                const bookableEvents = availableEvents.filter((event) => event.eventState !== 'FINISHED');
+                const bookableEvents = availableEvents.filter(isEventBookable);
                 if (eventIdParameter !== null) {
                     const requested = Number.isInteger(requestedEventId) && requestedEventId !== null && requestedEventId > 0
                         ? bookableEvents.find((event) => event.id === requestedEventId)
@@ -125,6 +126,11 @@ export function BookingPage() {
         event.preventDefault();
         if (selectedEventId === null) {
             setError('Seleziona un evento prima di prenotare.');
+            return;
+        }
+        const eventToBook = events.find((item) => item.id === selectedEventId);
+        if (!eventToBook || !isEventBookable(eventToBook)) {
+            setError('Le prenotazioni per questo evento sono chiuse.');
             return;
         }
 
@@ -302,10 +308,10 @@ export function BookingPage() {
                             <label>Email<input name="email" type="email" autoComplete="email" placeholder="nome@esempio.it" required /></label>
                             <label>Telefono <span className="optional-label">Facoltativo</span><input name="phone" type="tel" autoComplete="tel" placeholder="+39 333 1234567" /></label>
                             <label className="checkbox-label required-consent">
-                                <input name="privacyAcknowledgement" type="checkbox" required />
-                                <span>Ho letto l’<Link className="text-link" to="/privacy" target="_blank" rel="noreferrer">informativa privacy</Link> sul trattamento dei dati. <small>Obbligatorio</small></span>
+                                <input key={`privacy-${selectedEventId}`} name="privacyAcknowledgement" type="checkbox" required />
+                                <span>Ho letto l’<Link className="text-link" to={selectedEvent ? `/privacy?eventId=${selectedEvent.id}` : '/privacy'} target="_blank" rel="noreferrer">informativa privacy</Link> sul trattamento dei dati. <small>Obbligatorio</small></span>
                             </label>
-                            <label className="checkbox-label"><input name="marketingConsent" type="checkbox" /><span>Desidero ricevere aggiornamenti sui prossimi eventi. <small>Facoltativo</small></span></label>
+                            <label className="checkbox-label"><input key={`marketing-${selectedEventId}`} name="marketingConsent" type="checkbox" /><span>Desidero ricevere via email aggiornamenti sui prossimi eventi di {selectedEvent?.organizerName ?? 'questo organizzatore'}. <small>Facoltativo</small></span></label>
                             <p className="form-note">I dati della prenotazione servono a generare il pass e verificare il tuo ingresso.</p>
                             <button className="button primary full" disabled={busy || eventsLoading || selectedEventId === null}>
                                 {busy ? 'Creazione del pass…' : 'Ottieni il tuo pass'} <ArrowRight size={18} />

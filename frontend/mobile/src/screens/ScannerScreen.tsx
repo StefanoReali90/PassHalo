@@ -1,11 +1,13 @@
 import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, QrCode, XCircle } from 'lucide-react-native';
 import { api } from '../api';
 import { Button, Card, Field, Notice, PageHeader } from '../components/ui';
 import { colors, radii, spacing } from '../theme';
+import { isEventBookable } from '../eventAvailability';
+import type { MyEvent } from '../types';
 
 const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 
@@ -27,16 +29,37 @@ export function ScannerScreen() {
   const [locked, setLocked] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [events, setEvents] = useState<MyEvent[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [eventsError, setEventsError] = useState('');
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  const loadEvents = useCallback(async () => {
+    setEventsLoading(true);
+    setEventsError('');
+    try {
+      const operational = (await api.myEvents()).filter(isEventBookable);
+      setEvents(operational);
+      setSelectedEventId((current) => operational.some((event) => event.id === current)
+        ? current : operational[0]?.id ?? null);
+    } catch (error) {
+      setEventsError(error instanceof Error ? error.message : 'Eventi assegnati non disponibili.');
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadEvents(); }, [loadEvents]);
 
   const validate = useCallback(async (rawValue: string) => {
     const uuid = extractUuid(rawValue);
-    if (!uuid || busy || locked) return;
+    if (!uuid || busy || locked || selectedEventId === null) return;
     setBusy(true);
     setLocked(true);
     setResult(null);
     try {
-      const checked = await api.checkIn(uuid);
-      const message = `${checked.name} ${checked.surname} · ${checked.eventName}`;
+      const checked = await api.checkIn(uuid, selectedEventId);
+      const message = `Pass convalidato · ${checked.eventName}`;
       setResult({ ok: true, message });
       setManualCode('');
       setHistory((current) => [{ id: `${Date.now()}`, ok: true, message, time: new Date().toLocaleTimeString('it-IT') }, ...current].slice(0, 6));
@@ -49,7 +72,7 @@ export function ScannerScreen() {
     } finally {
       setBusy(false);
     }
-  }, [busy, locked]);
+  }, [busy, locked, selectedEventId]);
 
   const onBarcodeScanned = ({ data }: BarcodeScanningResult) => {
     void validate(data);
@@ -63,6 +86,24 @@ export function ScannerScreen() {
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
       <PageHeader eyebrow="Controllo ingressi" title="Un pass. Un ingresso." description="La convalida avviene subito sul server e impedisce il riutilizzo dello stesso QR." />
+
+      {eventsError ? <Notice tone="error">{eventsError}</Notice> : null}
+      {events.length === 0 && !eventsError && !eventsLoading ? <Notice>Nessun evento attivo assegnato.</Notice> : null}
+      <Button label="Aggiorna eventi" onPress={() => void loadEvents()} variant="secondary" busy={eventsLoading} />
+      {events.length > 0 ? (
+        <Card>
+          <Text style={styles.cameraTitle}>Evento da controllare</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eventRow}>
+            {events.map((event) => (
+              <Pressable key={event.id} onPress={() => setSelectedEventId(event.id)}
+                accessibilityRole="button" accessibilityState={{ selected: selectedEventId === event.id }}
+                style={[styles.eventChoice, selectedEventId === event.id && styles.eventChoiceSelected]}>
+                <Text style={styles.eventChoiceText}>{event.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Card>
+      ) : null}
 
       {result ? (
         <View style={[styles.result, result.ok ? styles.resultOk : styles.resultKo]}>
@@ -89,7 +130,7 @@ export function ScannerScreen() {
               style={StyleSheet.absoluteFill}
               facing="back"
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={locked ? undefined : onBarcodeScanned}
+              onBarcodeScanned={locked || selectedEventId === null ? undefined : onBarcodeScanned}
             />
             <View pointerEvents="none" style={styles.target} />
           </View>
@@ -97,7 +138,7 @@ export function ScannerScreen() {
 
         <Text style={styles.or}>oppure inserisci il codice</Text>
         <Field label="UUID del pass" value={manualCode} onChangeText={setManualCode} autoCapitalize="none" autoCorrect={false} />
-        <Button label="Convalida" onPress={() => void validate(manualCode)} busy={busy} disabled={!manualCode.trim() || locked} />
+        <Button label="Convalida" onPress={() => void validate(manualCode)} busy={busy} disabled={!manualCode.trim() || locked || selectedEventId === null} />
       </Card>
 
       <Card>
@@ -120,6 +161,10 @@ export function ScannerScreen() {
 const styles = StyleSheet.create({
   page: { padding: spacing.lg, paddingBottom: 120, gap: spacing.lg },
   cameraCard: { padding: spacing.md },
+  eventRow: { gap: spacing.sm, paddingTop: spacing.md },
+  eventChoice: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.medium, padding: spacing.md },
+  eventChoiceSelected: { borderColor: colors.accent, backgroundColor: colors.surface },
+  eventChoiceText: { color: colors.text, fontWeight: '700' },
   cameraFrame: { height: 390, borderRadius: radii.large, overflow: 'hidden', backgroundColor: '#000' },
   cameraPlaceholder: { minHeight: 280, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.lg },
   target: { position: 'absolute', width: 220, height: 220, borderColor: colors.accent, borderWidth: 3, borderRadius: 24, alignSelf: 'center', top: 85 },

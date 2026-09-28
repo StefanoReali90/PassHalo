@@ -237,6 +237,8 @@ class EventAccessIntegrationTest {
         Event secondEvent = saveEvent(secondOwner);
         saveMembership(secondEvent, secondEventStaff, EventRole.STAFF, MembershipState.ACTIVE,
                 LocalDateTime.now().minusDays(1), null);
+        saveMembership(secondEvent, firstOwner, EventRole.STAFF, MembershipState.ACTIVE,
+                LocalDateTime.now().minusDays(1), null);
 
         Booking booking = new Booking();
         booking.setEvent(firstEvent);
@@ -249,7 +251,13 @@ class EventAccessIntegrationTest {
                 .andExpect(status().isForbidden());
         assertEquals(BookingStatus.CREATED, booking.getBookingStatus());
 
-        mockMvc.perform(patch("/bookings/check-in/{uuid}", booking.getUuid()).with(user(firstOwner)))
+        mockMvc.perform(patch("/bookings/events/{eventId}/check-in/{uuid}", secondEvent.getId(), booking.getUuid())
+                        .with(user(firstOwner)))
+                .andExpect(status().isNotFound());
+        assertEquals(BookingStatus.CREATED, booking.getBookingStatus());
+
+        mockMvc.perform(patch("/bookings/events/{eventId}/check-in/{uuid}", firstEvent.getId(), booking.getUuid())
+                        .with(user(firstOwner)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eventName").value(firstEvent.getName()))
                 .andExpect(jsonPath("$.name").doesNotExist())

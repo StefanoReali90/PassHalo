@@ -4,6 +4,7 @@ import { checkInBooking } from '../api/booking';
 import { decrementWalkInCount, getMyEvents, incrementWalkInCount } from '../api/events';
 import { QrCameraScanner } from '../components/QrCameraScanner';
 import type { MyEvent } from '../types';
+import { isEventBookable } from '../utils/eventAvailability';
 
 interface ScanHistoryItem {
     id: number;
@@ -59,7 +60,7 @@ export function StaffScanPage() {
         getMyEvents()
             .then((myEvents) => {
                 if (!active) return;
-                const operational = myEvents.filter((event) => event.eventState !== 'FINISHED');
+                const operational = myEvents.filter(isEventBookable);
                 setEvents(operational);
                 const requestedEventId = Number(new URLSearchParams(window.location.search).get('eventId'));
                 setSelectedEventId(operational.find((event) => event.id === requestedEventId)?.id ?? operational[0]?.id ?? null);
@@ -82,13 +83,13 @@ export function StaffScanPage() {
 
     const validatePass = useCallback(async (rawValue: string) => {
         const uuid = extractUuid(rawValue);
-        if (!uuid || busy || !online || events.length === 0) return;
+        if (!uuid || busy || !online || selectedEventId === null) return;
 
         setBusy(true);
         setSuccess(null);
         setError(null);
         try {
-            const result = await checkInBooking(uuid);
+            const result = await checkInBooking(uuid, selectedEventId);
             const description = `Pass convalidato · ${result.eventName}`;
             setSuccess(description);
             setToken('');
@@ -103,7 +104,7 @@ export function StaffScanPage() {
             setBusy(false);
             window.setTimeout(() => focusScannerInput(inputRef.current), 0);
         }
-    }, [addHistory, busy, online, events.length]);
+    }, [addHistory, busy, online, selectedEventId]);
 
     const adjustWalkIns = async (direction: 'increment' | 'decrement') => {
         if (selectedEventId === null || walkInBusy || !online) return;
@@ -141,6 +142,22 @@ export function StaffScanPage() {
             {!online && <div className="notice error" role="alert"><WifiOff size={17} />Il check-in richiede una connessione al server per impedire riutilizzi dello stesso QR.</div>}
             {eventsError && <div className="notice error" role="alert">{eventsError}</div>}
             {!eventsLoading && events.length === 0 && <div className="notice error" role="alert">Non hai eventi attivi assegnati.</div>}
+
+            {selectedEventId !== null && (
+                <div className="panel">
+                    <label htmlFor="scan-event">Evento da controllare</label>
+                    <select id="scan-event" value={selectedEventId} disabled={busy || eventsLoading} onChange={(event) => {
+                        const eventId = Number(event.target.value);
+                        setSelectedEventId(eventId);
+                        setWalkInMessage('');
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('eventId', String(eventId));
+                        window.history.replaceState(null, '', url);
+                    }}>
+                        {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+                    </select>
+                </div>
+            )}
 
             <div className="scan-grid">
                 <article className="panel scan-panel">
@@ -194,17 +211,7 @@ export function StaffScanPage() {
                     <div className="walk-in-tools">
                         <span className="eyebrow">Ingressi senza prenotazione</span>
                         <h2>Registra gli accessi in cassa</h2>
-                        <label htmlFor="walk-in-event">Evento</label>
-                        <select id="walk-in-event" value={selectedEventId ?? ''} onChange={(event) => {
-                            const eventId = Number(event.target.value);
-                            setSelectedEventId(eventId);
-                            setWalkInMessage('');
-                            const url = new URL(window.location.href);
-                            url.searchParams.set('eventId', String(eventId));
-                            window.history.replaceState(null, '', url);
-                        }} disabled={eventsLoading || events.length === 0}>
-                            {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
-                        </select>
+                        <p>Evento: <strong>{events.find((event) => event.id === selectedEventId)?.name ?? 'Nessuno'}</strong></p>
                         <p>Registrati da questo dispositivo durante la sessione: <strong>{selectedEventId === null ? 0 : sessionWalkIns[selectedEventId] ?? 0}</strong></p>
                         <div className="counter-actions">
                             <button className="button" disabled={walkInBusy || !online || selectedEventId === null || (sessionWalkIns[selectedEventId] ?? 0) <= 0} onClick={() => void adjustWalkIns('decrement')}><Minus size={16} /> Correggi</button>

@@ -14,4 +14,5 @@ public interface EventJoinCodeRepository extends JpaRepository<EventJoinCode, Lo
     Optional<EventJoinCode> findByCodeHash(String codeHash);
 
     List<EventJoinCode> findAllByEventIdAndRevokedAtIsNull(Long eventId);
+    List<EventJoinCode> findAllByEventId(Long eventId);
 }

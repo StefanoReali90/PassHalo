@@ -3,6 +3,7 @@ import {
   Image,
   ImageBackground,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -15,6 +16,7 @@ import {
 import { CalendarDays, MapPin, TicketCheck } from 'lucide-react-native';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { isEventBookable } from '../eventAvailability';
 import { colors, radii, spacing } from '../theme';
 import type { BookingResponse, PassHaloEvent } from '../types';
 import { Button, Card, Field, LoadingBlock, Notice, PageHeader } from '../components/ui';
@@ -42,13 +44,14 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
 
   const loadEvents = useCallback(async () => {
     if (!apiBaseUrl) return;
     setLoading(true);
     setError('');
     try {
-      const available = (await api.events()).filter((event) => event.eventState !== 'FINISHED');
+      const available = (await api.events()).filter(isEventBookable);
       setEvents(available);
       setSelectedId((current) => available.some((event) => event.id === current) ? current : available[0]?.id ?? null);
     } catch (requestError) {
@@ -67,9 +70,22 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
     [events, selectedId],
   );
 
+  useEffect(() => {
+    setMarketingConsent(false);
+    setPrivacyAcknowledged(false);
+  }, [selectedId]);
+
   const submit = async () => {
     if (!selectedEvent || !name.trim() || !surname.trim() || !email.trim()) {
       setError('Seleziona un evento e compila nome, cognome ed email.');
+      return;
+    }
+    if (!isEventBookable(selectedEvent)) {
+      setError('Le prenotazioni per questo evento sono chiuse.');
+      return;
+    }
+    if (!privacyAcknowledged) {
+      setError('Leggi e conferma l’informativa privacy prima di prenotare.');
       return;
     }
     setSubmitting(true);
@@ -98,6 +114,7 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
     setEmail('');
     setPhone('');
     setMarketingConsent(false);
+    setPrivacyAcknowledged(false);
   };
 
   if (!apiBaseUrl) {
@@ -120,7 +137,7 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
           <Text style={styles.muted}>{result.eventName}</Text>
           <Image source={{ uri: qrSource(result.qrCodeBase64) }} style={styles.qr} resizeMode="contain" />
           <Text selectable style={styles.uuid}>{result.uuid}</Text>
-          <Text style={styles.muted}>Una copia del pass viene inviata anche all’indirizzo {result.email}.</Text>
+          <Text style={styles.muted}>Conserva questo QR. Se l’email non arriva a {result.email}, puoi usare il codice mostrato qui.</Text>
           <Button label="Crea un’altra prenotazione" onPress={reset} variant="secondary" />
         </Card>
       </ScrollView>
@@ -180,9 +197,19 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
               <Field label="Cognome" value={surname} onChangeText={setSurname} autoCapitalize="words" autoComplete="name-family" />
               <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email" />
               <Field label="Telefono (facoltativo)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" />
+              <Pressable onPress={() => {
+                const privacyUrl = `${apiBaseUrl.replace(/\/api\/?$/, '')}/privacy?eventId=${selectedEvent?.id ?? ''}`;
+                void Linking.openURL(privacyUrl).catch(() => setError('Informativa privacy non disponibile.'));
+              }}>
+                <Text style={styles.privacyLink}>Leggi l’informativa privacy</Text>
+              </Pressable>
+              <View style={styles.consentRow}>
+                <Text style={styles.label}>Ho letto l’informativa privacy</Text>
+                <Switch value={privacyAcknowledged} onValueChange={setPrivacyAcknowledged} trackColor={{ true: colors.accent }} thumbColor={privacyAcknowledged ? colors.accentDark : colors.muted} />
+              </View>
               <View style={styles.consentRow}>
                 <View style={styles.consentCopy}>
-                  <Text style={styles.label}>Aggiornamenti su eventi futuri</Text>
+                  <Text style={styles.label}>Email sui prossimi eventi di {selectedEvent?.organizerName ?? 'questo organizzatore'}</Text>
                   <Text style={styles.muted}>Facoltativo e separato dalla prenotazione.</Text>
                 </View>
                 <Switch value={marketingConsent} onValueChange={setMarketingConsent} trackColor={{ true: colors.accent }} thumbColor={marketingConsent ? colors.accentDark : colors.muted} />
@@ -220,6 +247,7 @@ const styles = StyleSheet.create({
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   consentCopy: { flex: 1, gap: 3 },
   label: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  privacyLink: { color: colors.accent, fontSize: 14, fontWeight: '700', textDecorationLine: 'underline' },
   ticket: { alignItems: 'center' },
   ticketStatus: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, alignSelf: 'stretch' },
   ticketStatusText: { color: colors.success, fontWeight: '900', letterSpacing: 1 },

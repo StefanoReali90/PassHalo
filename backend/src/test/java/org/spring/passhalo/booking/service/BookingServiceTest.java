@@ -25,6 +25,7 @@ import org.spring.passhalo.user.entity.User;
 import org.spring.passhalo.user.service.AuthEventService;
 
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -176,8 +177,9 @@ public class BookingServiceTest {
         event.setId(1L);
         event.setName("Concerto");
         event.setTotalTickets(300);
+        event.setEndDateTime(LocalDateTime.now().plusDays(1));
         when(bookingMapper.toEntity(request)).thenReturn(new Booking());
-        when(eventRepository.findById(1L)).thenReturn(Optional.of(event));
+        when(eventRepository.findDistinctById(1L)).thenReturn(Optional.of(event));
         when(cryptoService.emailLookupHash("mario.rossi@example.com")).thenReturn("v1:lookup-hash");
         when(bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(1L, "v1:lookup-hash", BookingStatus.CANCELLED)).thenReturn(false);
         when(bookingRepository.existsByEventIdAndEmailIgnoreCaseAndBookingStatusNot(1L, "mario.rossi@example.com", BookingStatus.CANCELLED)).thenReturn(false);
@@ -191,7 +193,7 @@ public class BookingServiceTest {
         assertEquals(expectedResponse, response);
         verify(bookingRepository, times(1)).save(any(Booking.class));
         verify(emailService, times(1)).sendBookingConfirmation(any(), any(), any(), any(), any());
-        verify(marketingService, times(1)).registerConsent(any(), any(), any());
+        verify(marketingService, times(1)).registerConsent(any(), any(), any(), any(), any());
 
     }
 
@@ -199,7 +201,7 @@ public class BookingServiceTest {
     void createBooking_WhenEventNotFound_ShouldThrowException() {
         BookingRequest request = new BookingRequest("Mario", "Rossi", "mario.rossi@example.com", "1234567890", 1L, true);
         when(bookingMapper.toEntity(request)).thenReturn(new Booking());
-        when(eventRepository.findById(1L)).thenReturn(Optional.empty());
+        when(eventRepository.findDistinctById(1L)).thenReturn(Optional.empty());
         assertThrows(EventNotFoundException.class, () -> bookingService.createBooking(request));
     }
 
@@ -207,7 +209,9 @@ public class BookingServiceTest {
     void createBooking_WhenAlreadyBooked_ShouldThrowException() {
         BookingRequest request = new BookingRequest("Mario", "Rossi", "mario.rossi@example.com", "1234567890", 1L, true);
         when(bookingMapper.toEntity(request)).thenReturn(new Booking());
-        when(eventRepository.findById(1L)).thenReturn(Optional.of(new Event()));
+        Event event = new Event();
+        event.setEndDateTime(LocalDateTime.now().plusDays(1));
+        when(eventRepository.findDistinctById(1L)).thenReturn(Optional.of(event));
         when(cryptoService.emailLookupHash("mario.rossi@example.com")).thenReturn("v1:lookup-hash");
         when(bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(1L, "v1:lookup-hash", BookingStatus.CANCELLED)).thenReturn(true);
         assertThrows(AlreadyBookedException.class, () -> bookingService.createBooking(request));
@@ -219,8 +223,9 @@ public class BookingServiceTest {
         Event event = new Event();
         event.setId(1L);
         event.setTotalTickets(100);
+        event.setEndDateTime(LocalDateTime.now().plusDays(1));
         when(bookingMapper.toEntity(request)).thenReturn(new Booking());
-        when(eventRepository.findById(1L)).thenReturn(Optional.of(event));
+        when(eventRepository.findDistinctById(1L)).thenReturn(Optional.of(event));
         when(cryptoService.emailLookupHash("mario.rossi@example.com")).thenReturn("v1:lookup-hash");
         when(bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(1L, "v1:lookup-hash", BookingStatus.CANCELLED)).thenReturn(false);
         when(bookingRepository.existsByEventIdAndEmailIgnoreCaseAndBookingStatusNot(1L, "mario.rossi@example.com", BookingStatus.CANCELLED)).thenReturn(false);
@@ -245,6 +250,19 @@ public class BookingServiceTest {
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         verify(bookingRepository, times(1)).findForCheckInByUuid(booking.getUuid());
         verify(authEventService).checkUserAccess(event.getId(), user.getId());
+    }
+
+    @Test
+    void createBooking_WhenEventHasEnded_ShouldThrowException() {
+        BookingRequest request = new BookingRequest("Mario", "Rossi", "mario@example.test", null, 1L, false);
+        Event event = new Event();
+        event.setEndDateTime(LocalDateTime.now().minusMinutes(1));
+        when(bookingMapper.toEntity(request)).thenReturn(new Booking());
+        when(eventRepository.findDistinctById(1L)).thenReturn(Optional.of(event));
+
+        assertThrows(EventFinishedException.class, () -> bookingService.createBooking(request));
+        verifyNoInteractions(cryptoService, emailService);
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test

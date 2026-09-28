@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.marketing.entity.MarketingSubscriber;
 import org.spring.passhalo.marketing.repository.MarketingRepository;
 import org.spring.passhalo.security.PiiCryptoService;
+import org.spring.passhalo.user.entity.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,21 +24,25 @@ public class MarketingService {
 
     private final MarketingRepository marketingRepository;
     private final PiiCryptoService cryptoService;
+    private final BrevoSyncService brevoSyncService;
 
     @Value("${app.marketing.retention-months:24}")
     private long retentionMonths = 24;
 
     @Transactional
-    public String registerConsent(String name, String surname, String email) {
+    public String registerConsent(User owner, Long eventId, String name, String surname, String email) {
         if (retentionMonths < 1) throw new IllegalStateException("Marketing retention must be at least one month");
         String normalizedEmail = email.trim();
         String emailLookupHash = cryptoService.emailLookupHash(email);
-        var subscribers = marketingRepository.findAllByEmailLookupHash(emailLookupHash);
+        var subscribers = marketingRepository.findAllByOwnerIdAndEmailLookupHash(owner.getId(), emailLookupHash);
         if (subscribers.isEmpty()) {
-            subscribers = marketingRepository.findAllByEmailIgnoreCase(normalizedEmail);
+            subscribers = marketingRepository.findAllByOwnerIdAndEmailIgnoreCase(owner.getId(), normalizedEmail);
         }
 
         MarketingSubscriber subscriber = subscribers.isEmpty() ? new MarketingSubscriber() : subscribers.getFirst();
+        subscriber.setOwner(owner);
+        subscriber.setConsentEventId(eventId);
+        subscriber.setConsentVersion("owner-email-brevo-v1");
         subscriber.setNameCiphertext(cryptoService.encrypt(name));
         subscriber.setSurnameCiphertext(cryptoService.encrypt(surname));
         subscriber.setEmailCiphertext(cryptoService.encrypt(email));
@@ -51,14 +56,23 @@ public class MarketingService {
         subscriber.setUnsubscribeTokenHash(hashToken(unsubscribeToken));
         subscriber.setActive(true);
         marketingRepository.save(subscriber);
+        brevoSyncService.queue(owner, emailLookupHash, subscriber.getEmailCiphertext());
         return unsubscribeToken;
     }
 
     @Transactional
     public void unsubscribe(String token) {
         if (token == null || token.isBlank() || token.length() > 128) return;
-        marketingRepository.findByUnsubscribeTokenHash(hashToken(token))
-                .ifPresent(subscriber -> marketingRepository.deleteAllByEmailLookupHash(subscriber.getEmailLookupHash()));
+        marketingRepository.findByUnsubscribeTokenHash(hashToken(token)).ifPresent(subscriber -> {
+            if (subscriber.getOwner() == null) {
+                marketingRepository.deleteAllByOwnerIsNullAndEmailLookupHash(subscriber.getEmailLookupHash());
+            } else {
+                brevoSyncService.queue(subscriber.getOwner(), subscriber.getEmailLookupHash(),
+                        subscriber.getEmailCiphertext());
+                marketingRepository.deleteAllByOwnerIdAndEmailLookupHash(
+                        subscriber.getOwner().getId(), subscriber.getEmailLookupHash());
+            }
+        });
     }
 
     private String createUnsubscribeToken() {

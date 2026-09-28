@@ -37,6 +37,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -240,6 +241,33 @@ class EventInvitationFlowIntegrationTest {
         ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
         verify(emailService).sendEmailConfirmation(any(EventInvitation.class), token.capture());
 
+        mockMvc.perform(post("/invitations/accept")
+                        .with(user(invitee))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"" + token.getValue() + "\"}"))
+                .andExpect(status().isBadRequest());
+        assertTrue(membershipRepository.findByEventIdAndCollaboratorId(event.getId(), invitee.getId()).isEmpty());
+    }
+
+    @Test
+    void closingEventRevokesPendingInvitationAndPreventsAcceptance() throws Exception {
+        User owner = saveUser("closed-owner@example.test", Role.ADMIN);
+        User invitee = saveUser("closed-invitee@example.test", Role.STAFF);
+        Event event = saveEvent(owner);
+
+        mockMvc.perform(post("/events/{eventId}/invitations", event.getId())
+                        .with(user(owner))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"closed-invitee@example.test\",\"role\":\"STAFF\"}"))
+                .andExpect(status().isCreated());
+        ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendEmailConfirmation(any(EventInvitation.class), token.capture());
+
+        mockMvc.perform(patch("/events/{eventId}/close", event.getId()).with(user(owner)))
+                .andExpect(status().isNoContent());
+
+        EventInvitation invitation = invitationRepository.findAllByEventId(event.getId()).getFirst();
+        assertEquals(InviteState.REVOKED, invitation.getInviteState());
         mockMvc.perform(post("/invitations/accept")
                         .with(user(invitee))
                         .contentType(MediaType.APPLICATION_JSON)

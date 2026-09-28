@@ -5,6 +5,7 @@ import org.spring.passhalo.user.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -27,11 +28,15 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    @Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var cors = new CorsConfiguration();
         cors.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        cors.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
+        cors.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173",
+                frontendBaseUrl.replaceAll("/+$", "")));
         cors.setAllowedHeaders(List.of("*"));
         cors.setAllowCredentials(true);
         cors.setMaxAge(3600L);
@@ -75,6 +80,8 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/bookings", "/bookings/").permitAll()
                         .requestMatchers(HttpMethod.POST, "/marketing/unsubscribe").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/marketing/brevo/webhook/{ownerId}").permitAll()
+                        .requestMatchers("/marketing/brevo", "/marketing/brevo/").hasRole("ADMIN")
                         .requestMatchers("/staff-access/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/bookings/{uuid}",
@@ -108,6 +115,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/bookings/{uuid}").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/events/{id}/walk-in", "/events/{id}/walk-in/decrement", "/events/{id}/close").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/bookings/check-in/{uuid}").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/bookings/events/{eventId}/check-in/{uuid}").authenticated()
                         .requestMatchers(HttpMethod.GET, "/events", "/events/", "/events/{id}").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

@@ -39,7 +39,7 @@ export function MarketingUnsubscribePage() {
             <div className="panel form-panel">
                 {error && <div className="notice error" role="alert">{error}</div>}
                 {complete ? (
-                    <div className="notice success" role="status">Consenso revocato. I dati marketing associati sono stati cancellati.</div>
+                    <div className="notice success" role="status">Consenso revocato. Se l’organizzatore usa Brevo, la rimozione dalla sua lista viene sincronizzata.</div>
                 ) : token ? (
                     <form onSubmit={submit}>
                         <p>Conferma per revocare il consenso e cancellare i dati marketing collegati al tuo indirizzo email.</p>

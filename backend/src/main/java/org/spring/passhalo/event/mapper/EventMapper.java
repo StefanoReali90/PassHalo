@@ -61,7 +61,8 @@ public class EventMapper {
                 event.getLocation(),
                 event.getEventState(),
                 event.getVideoUrl(),
-                faqs
+                faqs,
+                event.getUser().getName() + " " + event.getUser().getSurname()
 
         );
     }

@@ -14,12 +14,12 @@ import static jakarta.persistence.LockModeType.PESSIMISTIC_WRITE;
 
 @Repository
 public interface EventInvitationRepository extends JpaRepository<EventInvitation, Long> {
-    @Lock(PESSIMISTIC_WRITE)
     Optional<EventInvitation> findByTokenHash(String tokenHash);
     boolean existsByEventIdAndRecipientEmailAndInviteStateAndExpiresAtAfter(Long eventId, String recipientEmail, InviteState inviteState, LocalDateTime now);
     @Lock(PESSIMISTIC_WRITE)
     Optional<EventInvitation> findByIdAndEventId(Long id, Long eventId);
     List<EventInvitation> findAllByEventIdAndInviteState(Long eventId, InviteState inviteState);
+    List<EventInvitation> findAllByEventId(Long eventId);
     @Lock(PESSIMISTIC_WRITE)
     List<EventInvitation> findAllByInviteStateAndExpiresAtLessThanEqual(InviteState inviteState, LocalDateTime expiresAt);
 

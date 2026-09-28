@@ -81,4 +81,22 @@ public class EmailService {
 
 
     }
+
+    public void sendPasswordReset(String to, String token) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
+            helper.setFrom(from);
+            helper.setTo(to);
+            helper.setSubject("Reimposta la password PassHalo");
+            helper.setText("Hai richiesto una nuova password. Apri questo link entro 15 minuti: "
+                    + frontendBaseUrl.replaceAll("/$", "") + "/reset-password#token=" + token
+                    + "\n\nSe non hai fatto questa richiesta, ignora questa email.");
+            mailSender.send(message);
+            log.info("Password reset email sent");
+        } catch (MessagingException exception) {
+            log.error("Failed to send password reset email - Error type: {}", exception.getClass().getSimpleName());
+            throw new IllegalStateException("Unable to send password reset email", exception);
+        }
+    }
 }

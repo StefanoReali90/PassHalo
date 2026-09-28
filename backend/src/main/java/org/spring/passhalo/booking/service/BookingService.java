@@ -21,11 +21,13 @@ import org.spring.passhalo.notification.service.EmailService;
 import org.spring.passhalo.booking.exception.EventFinishedException;
 import org.spring.passhalo.user.entity.User;
 import org.spring.passhalo.user.service.AuthEventService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -35,6 +37,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class BookingService {
+
+    @Value("${app.time-zone:Europe/Rome}")
+    private String timeZone = "Europe/Rome";
 
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
@@ -48,10 +53,12 @@ public class BookingService {
     @Transactional
     public BookingResponse createBooking(BookingRequest bookingRequest) {
         Booking booking = bookingMapper.toEntity(bookingRequest);
-        Event event = eventRepository.findById(bookingRequest.eventId())
+        // Serialize bookings for the same event before checking duplicate emails and capacity.
+        Event event = eventRepository.findDistinctById(bookingRequest.eventId())
                 .orElseThrow(() -> new EventNotFoundException("Event not found with id: " + bookingRequest.eventId()));
-        if (event.getEventState() == EventState.FINISHED) {
-            throw new EventFinishedException("Event is finished and no more bookings are allowed");
+        if (event.getEventState() == EventState.FINISHED ||
+                !LocalDateTime.now(ZoneId.of(timeZone)).isBefore(event.getEndDateTime())) {
+            throw new EventFinishedException("Le prenotazioni per questo evento sono chiuse.");
         }
         String emailLookupHash = cryptoService.emailLookupHash(bookingRequest.email());
         boolean alreadyBooked = bookingRepository.existsByEventIdAndEmailLookupHashAndBookingStatusNot(
@@ -70,7 +77,8 @@ public class BookingService {
         String qrCode = qrCodeService.createQrCode(savedBooking.getUuid().toString());
         String unsubscribeToken = null;
         if (bookingRequest.marketingConsent()) {
-            unsubscribeToken = marketingService.registerConsent(bookingRequest.name(), bookingRequest.surname(), bookingRequest.email());
+            unsubscribeToken = marketingService.registerConsent(event.getUser(), event.getId(),
+                    bookingRequest.name(), bookingRequest.surname(), bookingRequest.email());
         }
         emailService.sendBookingConfirmation(bookingRequest.email(), bookingRequest.name(), event.getName(),
                 qrCodeService.createQrCodeBytes(savedBooking.getUuid().toString()), unsubscribeToken);
@@ -161,6 +169,17 @@ public class BookingService {
 
         Booking booking = bookingRepository.findForCheckInByUuid(uuid).orElseThrow(() -> new BookingNotFoundException("Booking not found"));
         authEventService.checkStaffAccess(booking.getEvent().getId(), admin.getId());
+        return validateCheckIn(booking);
+    }
+
+    @Transactional
+    public CheckInResponse checkInBookingForEvent(UUID uuid, Long eventId, User user) {
+        Booking booking = bookingRepository.findForCheckInByUuid(uuid)
+                .orElseThrow(() -> new BookingNotFoundException("Booking not found"));
+        if (!booking.getEvent().getId().equals(eventId)) {
+            throw new BookingNotFoundException("Booking not found for this event");
+        }
+        authEventService.checkStaffAccess(eventId, user.getId());
         return validateCheckIn(booking);
     }
 

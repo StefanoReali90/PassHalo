@@ -55,6 +55,7 @@ export interface Event {
     imageUrl: string;
     videoUrl?: string | null;
     faqs?: EventFaq[];
+    organizerName: string;
 }
 
 export type EventRole = 'EVENT_ADMIN' | 'STAFF';
