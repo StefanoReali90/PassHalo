@@ -26,14 +26,18 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT b FROM Booking b WHERE b.uuid = :uuid")
     Optional<Booking> findForCheckInByUuid(@Param("uuid") UUID uuid);
 
-    boolean existsByEventIdAndEmailAndBookingStatusNot(Long eventId, String email, BookingStatus bookingStatus);
+    boolean existsByEventIdAndEmailLookupHashAndBookingStatusNot(Long eventId, String emailLookupHash, BookingStatus bookingStatus);
+    boolean existsByEventIdAndEmailIgnoreCaseAndBookingStatusNot(Long eventId, String email, BookingStatus bookingStatus);
 
     long countByEventId(Long eventId);
     long countByEventIdAndBookingStatusNot(Long eventId, BookingStatus bookingStatus);
     List<Booking> findAllByEventId(Long eventId);
-    List<Booking> findAllByEmail(String email);
-    List<Booking> findAllByEventIdAndEmail(Long eventId, String email);
-    List<Booking> findAllByEmailAndEvent_User_Id(String email, Long userId);
+    List<Booking> findAllByEventIdAndEmailIgnoreCase(Long eventId, String email);
+    List<Booking> findAllByEmailIgnoreCaseAndEvent_User_Id(String email, Long userId);
+    List<Booking> findAllByEmailLookupHash(String emailLookupHash);
+    List<Booking> findAllByEventIdAndEmailLookupHash(Long eventId, String emailLookupHash);
+    List<Booking> findAllByEmailLookupHashAndEvent_User_Id(String emailLookupHash, Long userId);
+    List<Booking> findTop500ByEmailLookupHashIsNullAndEmailIsNotNullOrderByIdAsc();
 
     long countByEventIdAndBookingStatus(Long eventId, BookingStatus bookingStatus);
 }

@@ -1,0 +1,138 @@
+name: Verify and deploy PassHalo
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '26'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Run tests and package
+        run: bash ./mvnw --batch-mode --no-transfer-progress verify
+
+  web:
+    name: Web build and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  mobile:
+    name: Mobile typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/mobile
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/mobile/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+
+  deploy:
+    name: Deploy to Ubuntu VPS
+    needs: [backend, web, mobile]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: passhalo-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '26'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Check deployment configuration
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          PRIVACY_CONTROLLER_NAME: ${{ vars.PRIVACY_CONTROLLER_NAME }}
+          PRIVACY_CONTACT_EMAIL: ${{ vars.PRIVACY_CONTACT_EMAIL }}
+        run: |
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS PRIVACY_CONTROLLER_NAME PRIVACY_CONTACT_EMAIL; do
+            if [ -z "${!name}" ]; then
+              echo "Missing deployment setting: $name" >&2
+              exit 1
+            fi
+          done
+      - name: Build tested revision
+        env:
+          VITE_API_BASE_URL: /api
+          VITE_PRIVACY_CONTROLLER_NAME: ${{ vars.PRIVACY_CONTROLLER_NAME }}
+          VITE_PRIVACY_CONTACT_EMAIL: ${{ vars.PRIVACY_CONTACT_EMAIL }}
+        run: |
+          bash backend/mvnw --batch-mode --no-transfer-progress -f backend/pom.xml -DskipTests package
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+          mkdir -p release/web
+          cp backend/target/PassHalo-0.0.1-SNAPSHOT.jar release/backend.jar
+          cp -a frontend/dist/. release/web/
+          tar -czf release.tar.gz -C release .
+      - name: Install SSH credentials
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+      - name: Upload and activate release
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            release.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/opt/passhalo/incoming/$GITHUB_SHA.tar.gz"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" "sudo /usr/local/sbin/passhalo-deploy $GITHUB_SHA"

@@ -4,14 +4,12 @@ import {
     cancelBooking,
     getBookingById,
     getBookingByUUID,
-    getBookings,
-    getBookingsByEmail,
     getBookingsByEventAndEmail,
     getBookingsByEventId,
 } from '../api/booking';
 import { getMyEvents } from '../api/events';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import type { BookingResponse, Event } from '../types';
+import type { BookingResponse, MyEvent } from '../types';
 
 type SearchMode = 'all' | 'event' | 'email' | 'event-email' | 'uuid' | 'id';
 
@@ -43,7 +41,7 @@ function formatDate(value: string) {
 
 export function BookingsPage() {
     const [bookings, setBookings] = useState<BookingResponse[]>([]);
-    const [events, setEvents] = useState<Event[]>([]);
+    const [events, setEvents] = useState<MyEvent[]>([]);
     const [mode, setMode] = useState<SearchMode>('all');
     const [eventId, setEventId] = useState<number | null>(null);
     const [email, setEmail] = useState('');
@@ -56,12 +54,14 @@ export function BookingsPage() {
 
     useEffect(() => {
         let active = true;
-        Promise.all([getMyEvents(), getBookings()])
-            .then(([ownedEvents, allBookings]) => {
+        getMyEvents()
+            .then(async (myEvents) => {
+                const manageableEvents = myEvents.filter((event) => event.role === 'EVENT_ADMIN');
+                const bookingsByEvent = await Promise.all(manageableEvents.map((event) => getBookingsByEventId(event.id)));
                 if (!active) return;
-                setEvents(ownedEvents);
-                setEventId(ownedEvents[0]?.id ?? null);
-                setBookings(allBookings);
+                setEvents(manageableEvents);
+                setEventId(manageableEvents[0]?.id ?? null);
+                setBookings(bookingsByEvent.flat());
             })
             .catch((requestError) => {
                 if (active) setError(requestError instanceof Error ? requestError.message : 'Prenotazioni non disponibili.');
@@ -83,7 +83,7 @@ export function BookingsPage() {
             let result: BookingResponse[];
             switch (mode) {
                 case 'all':
-                    result = await getBookings();
+                    result = (await Promise.all(events.map((event) => getBookingsByEventId(event.id)))).flat();
                     break;
                 case 'event':
                     if (eventId === null) throw new Error('Seleziona un evento.');
@@ -91,7 +91,7 @@ export function BookingsPage() {
                     break;
                 case 'email':
                     if (!email.trim()) throw new Error('Inserisci un indirizzo email.');
-                    result = await getBookingsByEmail(email);
+                    result = (await Promise.all(events.map((event) => getBookingsByEventAndEmail(event.id, email.trim())))).flat();
                     break;
                 case 'event-email':
                     if (eventId === null || !email.trim()) throw new Error('Seleziona un evento e inserisci un’email.');

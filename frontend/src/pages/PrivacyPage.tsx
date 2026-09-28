@@ -1,10 +1,23 @@
 import { ArrowLeft, ExternalLink, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { getEventById } from '../api/events';
 
 const controllerName = import.meta.env.VITE_PRIVACY_CONTROLLER_NAME?.trim() || 'l’organizzatore dell’evento';
 const contactEmail = import.meta.env.VITE_PRIVACY_CONTACT_EMAIL?.trim();
+const marketingRetentionMonths = import.meta.env.VITE_MARKETING_RETENTION_MONTHS?.trim() || '24';
 
 export function PrivacyPage() {
+    const [eventOrganizer, setEventOrganizer] = useState<string | null>(null);
+    const requestedEventId = new URLSearchParams(window.location.search).get('eventId');
+    useEffect(() => {
+        const eventId = Number(requestedEventId);
+        if (!requestedEventId || !Number.isSafeInteger(eventId) || eventId <= 0) return;
+        let active = true;
+        getEventById(eventId).then(event => { if (active) setEventOrganizer(event.organizerName); }).catch(() => {});
+        return () => { active = false; };
+    }, [requestedEventId]);
+    const displayedController = eventOrganizer || (requestedEventId ? 'l’organizzatore dell’evento' : controllerName);
     return (
         <article className="privacy-page">
             <Link className="text-link privacy-back" to="/prenota"><ArrowLeft size={15} /> Torna alla prenotazione</Link>
@@ -20,7 +33,7 @@ export function PrivacyPage() {
                     <span className="privacy-index">01</span>
                     <div>
                         <h2>Titolare e contatti</h2>
-                        <p>Il titolare del trattamento è <strong>{controllerName}</strong>, che determina finalità e modalità del trattamento per il proprio evento.</p>
+                        <p>Il titolare del trattamento per questo evento è <strong>{displayedController}</strong>, che determina finalità e modalità del trattamento.</p>
                         {contactEmail ? (
                             <p>Per richieste sui dati personali puoi scrivere a <a className="text-link" href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p>
                         ) : (
@@ -43,7 +56,7 @@ export function PrivacyPage() {
                     <div>
                         <h2>Comunicazioni promozionali</h2>
                         <p>L’invio di aggiornamenti su eventi futuri è separato dalla prenotazione, facoltativo e basato sulla scelta espressa nell’apposita casella. Non selezionarla non impedisce di ottenere il pass.</p>
-                        <p>Il consenso può essere revocato in qualsiasi momento contattando il titolare.</p>
+                        <p>Se acconsenti, nome, cognome ed email vengono conservati separatamente dalla prenotazione per ricevere via email comunicazioni sui futuri eventi dello stesso organizzatore, anche dopo la chiusura dell’evento, per un massimo di {marketingRetentionMonths} mesi dal consenso. Se l’organizzatore collega il proprio account Brevo, questi dati vengono trasmessi a Brevo per gestire le campagne email. Puoi revocare il consenso usando il link nell’email di conferma o il link di disiscrizione nelle campagne.</p>
                     </div>
                 </section>
 
@@ -52,7 +65,8 @@ export function PrivacyPage() {
                     <div>
                         <h2>Accesso e conservazione</h2>
                         <p>I dati sono accessibili agli amministratori autorizzati. Lo staff addetto all’ingresso può soltanto verificare il QR code e ricevere l’esito del controllo.</p>
-                        <p>I dati identificativi vengono conservati fino alla chiusura amministrativa dell’evento, quando PassHalo ne prevede la cancellazione o anonimizzazione. Restano soltanto risultati aggregati, come numero di prenotazioni e presenze.</p>
+                        <p>Alla chiusura dell’evento il QR viene invalidato e i dati identificativi della prenotazione — nome, cognome, email e telefono — vengono rimossi. La registrazione conserva dati come stato, data e riferimento all’evento: la rimozione degli identificativi diretti non garantisce, da sola, l’anonimizzazione completa.</p>
+                        <p>Alla revoca, il contatto viene rimosso dall’elenco marketing di PassHalo. Se è collegato Brevo, un’email cifrata resta nella coda tecnica finché la rimozione dalla lista non riesce; il titolare può verificare le operazioni in attesa. I dati di prenotazione seguono tempi e finalità distinti: per richiederne l’accesso o la cancellazione, contatta il titolare indicato sopra. Possono restare dati strettamente necessari per obblighi di legge o per tutelare diritti.</p>
                     </div>
                 </section>
 

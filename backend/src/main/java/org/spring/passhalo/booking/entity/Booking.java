@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
+@Table(indexes = @Index(name = "ix_booking_event_email_lookup_hash", columnList = "event_id,email_lookup_hash"))
 @NoArgsConstructor
 @Setter
 @Getter
@@ -25,17 +26,35 @@ public class Booking {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    // Legacy plaintext column retained only while existing rows are migrated.
+    @Column(nullable = true)
     private String name;
 
-    @Column(nullable = false)
+    // Legacy plaintext column retained only while existing rows are migrated.
+    @Column(nullable = true)
     private String surname;
 
-    @Column(nullable = false)
+    // Legacy plaintext column retained only while existing rows are migrated.
+    @Column(nullable = true)
     private String email;
 
     @Column(nullable = true)
     private String phone;
+
+    @Column(name = "name_ciphertext", length = 1024)
+    private String nameCiphertext;
+
+    @Column(name = "surname_ciphertext", length = 1024)
+    private String surnameCiphertext;
+
+    @Column(name = "email_ciphertext", length = 1024)
+    private String emailCiphertext;
+
+    @Column(name = "phone_ciphertext", length = 1024)
+    private String phoneCiphertext;
+
+    @Column(name = "email_lookup_hash", length = 67)
+    private String emailLookupHash;
 
     @Column(nullable = false, unique = true)
     private UUID uuid;
@@ -53,8 +72,8 @@ public class Booking {
     @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean marketingConsent = false;
 
-    @Column(nullable = false)
-    private Timestamp consentAt = new Timestamp(System.currentTimeMillis());
+    @Column(nullable = true)
+    private Timestamp consentAt;
 
     @PrePersist
     public void prePersist() {
@@ -63,9 +82,6 @@ public class Booking {
         }
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
-        }
-        if (this.consentAt == null) {
-            this.consentAt = new Timestamp(System.currentTimeMillis());
         }
     }
 

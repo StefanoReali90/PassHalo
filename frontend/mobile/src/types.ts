@@ -32,6 +32,12 @@ export interface PassHaloEvent {
   eventState: EventState;
   videoUrl?: string | null;
   faqs?: EventFaq[];
+  organizerName: string;
+}
+
+export interface MyEvent extends PassHaloEvent {
+  role: 'EVENT_ADMIN' | 'STAFF';
+  owner: boolean;
 }
 
 export interface EventRequest {
@@ -75,8 +81,6 @@ export interface BookingResponse {
 
 export interface CheckInResponse {
   eventName: string;
-  name: string;
-  surname: string;
 }
 
 export interface EventDashboardResponse {

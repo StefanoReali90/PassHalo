@@ -5,7 +5,6 @@ import type {
     ForgotPasswordRequest,
     LoginResponse,
     ResetPasswordRequest,
-    StaffRegisterRequest,
     User,
 } from '../types';
 
@@ -36,30 +35,6 @@ export function registerAdmin(data: AdminRegisterRequest): Promise<User> {
     });
 }
 
-export function registerStaff(data: StaffRegisterRequest): Promise<User> {
-    return apiFetch<User>('/user/staff-register', {
-        method: 'POST',
-        body: JSON.stringify(data),
-    });
-}
-
-export function getUsers(): Promise<User[]> {
-    return apiFetch<User[]>('/user');
-}
-
-export function getUserByEmail(email: string): Promise<User> {
-    const query = new URLSearchParams({ email });
-    return apiFetch<User>(`/user/search?${query.toString()}`);
-}
-
-export function getUserById(userId: number): Promise<User> {
-    return apiFetch<User>(`/user/${userId}`);
-}
-
-export function deleteUser(userId: number): Promise<void> {
-    return apiFetch<void>(`/user/${userId}`, { method: 'DELETE' });
-}
-
 export function recoverPassword(data: ForgotPasswordRequest): Promise<void> {
     return apiFetch<void>('/user/recover-password', {
         method: 'POST',
@@ -67,8 +42,8 @@ export function recoverPassword(data: ForgotPasswordRequest): Promise<void> {
     });
 }
 
-export function changePassword(userId: number, data: ChangePasswordRequest): Promise<void> {
-    return apiFetch<void>(`/user/${userId}/change-password`, {
+export function changePassword(data: ChangePasswordRequest): Promise<void> {
+    return apiFetch<void>('/user/me/change-password', {
         method: 'PATCH',
         body: JSON.stringify(data),
     });

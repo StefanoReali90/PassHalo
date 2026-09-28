@@ -18,13 +18,6 @@ export interface AdminRegisterRequest {
     password: string;
 }
 
-export interface StaffRegisterRequest {
-    name: string;
-    surname: string;
-    email: string;
-    password: string;
-}
-
 export interface ForgotPasswordRequest {
     email: string;
 }
@@ -62,6 +55,42 @@ export interface Event {
     imageUrl: string;
     videoUrl?: string | null;
     faqs?: EventFaq[];
+    organizerName: string;
+}
+
+export type EventRole = 'EVENT_ADMIN' | 'STAFF';
+export type MembershipState = 'ACTIVE' | 'REVOKED';
+export type InviteState = 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
+
+export interface MyEvent extends Event {
+    role: EventRole;
+    owner: boolean;
+}
+
+export interface EventInvitationResponse {
+    id: number;
+    eventId: number;
+    recipientEmail: string;
+    proposedRole: EventRole;
+    state: InviteState;
+    createdAt: string;
+    expiresAt: string;
+    acceptedAt: string | null;
+    revokedAt: string | null;
+}
+
+export interface EventMembershipResponse {
+    id: number;
+    eventId: number;
+    collaboratorId: number;
+    collaboratorName: string;
+    collaboratorSurname: string;
+    collaboratorEmail: string;
+    role: EventRole;
+    state: MembershipState;
+    validFrom: string;
+    validUntil: string | null;
+    revokedAt: string | null;
 }
 
 export interface EventRequest {
@@ -119,6 +148,4 @@ export interface BookingResponse {
 
 export interface CheckInResponse {
     eventName: string;
-    name: string;
-    surname: string;
 }

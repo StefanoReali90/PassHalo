@@ -2,6 +2,8 @@
 
 Frontend React + TypeScript per prenotazioni pubbliche, amministrazione eventi e check-in.
 
+Per il VPS Ubuntu e gli aggiornamenti automatici dopo le pull request, segui la [guida al deploy](../deploy/README.md).
+
 ## Avvio locale
 
 ```bash
@@ -41,8 +43,7 @@ I due terminali e il backend devono rimanere avviati per tutta la prova. L'indir
 - `/admin/dashboard`: statistiche, walk-in e chiusura evento.
 - `/admin/events`: creazione, lettura, modifica ed eliminazione eventi.
 - `/admin/bookings`: elenco, ricerche e annullamento prenotazioni.
-- `/admin/users`: creazione STAFF, elenco, ricerca ed eliminazione utenti.
-- `/account`: cambio password.
+- `/account`: cambio password del proprio account.
 
 Tutte le richieste autenticate usano il cookie HttpOnly `jwt` tramite `credentials: 'include'`.
 
@@ -80,6 +81,5 @@ Lo script rifiuta host non locali e richiede l’abilitazione esplicita perché 
   ```
 
   `videoUrl` può contenere un MP4/WebM diretto, YouTube o Vimeo. Se `videoUrl` manca, il frontend usa `imageUrl`; se `faqs` manca o è vuoto, genera FAQ standard dai dati dell'evento. Il backend deve restituire questi campi nelle risposte evento e accettarli nei DTO di creazione/modifica perché siano condivisi tra dispositivi.
-- `UserResponse` non contiene l'ID, ma eliminazione e cambio password richiedono un ID numerico. Le schermate espongono quindi un campo ID manuale.
 - `BookingResponse` non contiene l'ID, ma l'annullamento richiede l'ID numerico. La schermata prenotazioni consente la ricerca e l'annullamento per ID manuale.
 - Il recupero password accetta il token nella rotta `/reset-password`, ma il backend deve consegnare tale token all'utente (per esempio via email).

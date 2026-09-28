@@ -1,14 +1,23 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, KeyRound } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { resetPassword } from '../api/auth';
 
 export function ResetPasswordPage() {
     const [searchParams] = useSearchParams();
-    const [token, setToken] = useState(searchParams.get('token') ?? '');
+    const [token, setToken] = useState(() =>
+        new URLSearchParams(window.location.hash.slice(1)).get('token') ?? searchParams.get('token') ?? '');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [complete, setComplete] = useState(false);
+
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        if (!url.hash && !url.searchParams.has('token')) return;
+        url.hash = '';
+        url.searchParams.delete('token');
+        window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+    }, []);
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();

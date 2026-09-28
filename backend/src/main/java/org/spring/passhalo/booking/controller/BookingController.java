@@ -65,9 +65,16 @@ public class BookingController {
     }
 
     @PatchMapping(path = "/check-in/{uuid}", produces = "application/json")
-    public ResponseEntity<CheckInResponse> checkInBooking(@PathVariable UUID uuid) {
-        CheckInResponse checkInResponse = bookingService.checkInBooking(uuid);
+    public ResponseEntity<CheckInResponse> checkInBooking(@PathVariable UUID uuid, @AuthenticationPrincipal User admin) {
+        CheckInResponse checkInResponse = bookingService.checkInBooking(uuid, admin);
         return ResponseEntity.ok(checkInResponse);
+    }
+
+    @PatchMapping(path = "/events/{eventId}/check-in/{uuid}", produces = "application/json")
+    public ResponseEntity<CheckInResponse> checkInBookingForEvent(@PathVariable Long eventId,
+                                                                   @PathVariable UUID uuid,
+                                                                   @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(bookingService.checkInBookingForEvent(uuid, eventId, user));
     }
 
 

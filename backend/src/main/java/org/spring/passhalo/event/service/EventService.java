@@ -7,40 +7,64 @@ import org.spring.passhalo.booking.exception.EventFinishedException;
 import org.spring.passhalo.booking.repository.BookingRepository;
 import org.spring.passhalo.booking.service.BookingService;
 import org.spring.passhalo.event.dto.EventDashboardResponse;
+import org.spring.passhalo.event.dto.EventRequest;
+import org.spring.passhalo.event.dto.EventResponse;
+import org.spring.passhalo.event.dto.MyEventResponse;
+import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.entity.EventFaq;
 import org.spring.passhalo.event.enums.EventState;
 import org.spring.passhalo.event.exception.AccessDeniedException;
-import org.spring.passhalo.event.repository.EventRepository;
-import org.spring.passhalo.event.dto.EventRequest;
-import org.spring.passhalo.event.dto.EventResponse;
-import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.exception.EventNotFoundException;
+import org.spring.passhalo.event.exception.EventDeletionException;
 import org.spring.passhalo.event.exception.InvalidDateException;
+import org.spring.passhalo.event.exception.InvalidCapacityException;
 import org.spring.passhalo.event.exception.InvalidPriceException;
 import org.spring.passhalo.event.mapper.EventMapper;
+import org.spring.passhalo.event.repository.EventRepository;
+import org.spring.passhalo.user.entity.EventMembership;
 import org.spring.passhalo.user.entity.User;
+import org.spring.passhalo.user.enums.EventRole;
+import org.spring.passhalo.user.enums.MembershipState;
+import org.spring.passhalo.user.repository.EventMembershipRepository;
+import org.spring.passhalo.user.service.AuthEventService;
+import org.spring.passhalo.user.service.EventJoinService;
+import org.spring.passhalo.user.service.EventInvitationService;
+import org.spring.passhalo.user.service.StaffAccessService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EventService {
+    @Value("${app.time-zone}")
+    private String timezone;
 
     private final EventRepository eventRepository;
     private final BookingRepository bookingRepository;
 
     private final EventMapper eventMapper;
     private final BookingService bookingService;
+    private final AuthEventService authEventService;
+    private final EventMembershipRepository eventMembershipRepository;
+    private final EventJoinService eventJoinService;
+    private final EventInvitationService eventInvitationService;
+    private final StaffAccessService staffAccessService;
 
     private void validateEventDates(EventRequest event) {
-        if (event.start().isAfter(event.end())) {
+        if (!event.start().isBefore(event.end())) {
             throw new InvalidDateException("Start date must be before end date");
         }
-        if (!(event.bookingPrice() < event.normalPrice())) {
-            throw new InvalidPriceException("Booking price must be less than normal price");
+        if (event.bookingPrice() > event.normalPrice()) {
+            throw new InvalidPriceException("Booking price cannot exceed normal price");
         }
     }
 
@@ -50,19 +74,21 @@ public class EventService {
         Event newEvent = eventMapper.toEntity(event);
         newEvent.setUser(admin);
         Event savedEvent = eventRepository.save(newEvent);
-        log.info("Event created successfully - ID: {}, Name: '{}', Created by Admin ID: {}", savedEvent.getId(), savedEvent.getName(), admin.getId());
+        log.info("Event created successfully");
         return eventMapper.toResponse(savedEvent);
     }
     @Transactional
     public EventResponse updateEvent(EventRequest event, Long Id, User admin) {
-        Event existingEvent = eventRepository.findById(Id).orElseThrow(() -> new EventNotFoundException("Event not found with id: " + Id));
-        if(!existingEvent.getUser().getId().equals(admin.getId())) {
-            throw new AccessDeniedException("User is not authorized to update this event");
-        }
+        Event existingEvent = eventRepository.findDistinctById(Id).orElseThrow(() -> new EventNotFoundException("Event not found with id: " + Id));
+        authEventService.checkUserAccess(Id, admin.getId());
         if(existingEvent.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Cannot update a finished event");
         }
         validateEventDates(event);
+        long activeBookings = bookingRepository.countByEventIdAndBookingStatusNot(Id, BookingStatus.CANCELLED);
+        if (event.totalTickets() < activeBookings) {
+            throw new InvalidCapacityException("La capienza non può essere inferiore alle prenotazioni esistenti.");
+        }
         existingEvent.setName(event.name());
         existingEvent.setDescription(event.description());
         existingEvent.setLocation(event.location());
@@ -100,45 +126,70 @@ public class EventService {
     }
 
     @Transactional(readOnly = true)
-    public List<EventResponse> getEventsByUser(Long userId) {
-        return eventRepository.findByUserId(userId).stream()
-                .map(eventMapper::toResponse)
-                .toList();
+    public List<MyEventResponse> getEventsByUser(Long userId) {
+        List<Event> ownedEvents = eventRepository.findByUserId(userId);
+        List< EventMembership> memberships = eventMembershipRepository.findByCollaboratorIdAndMembershipState(userId, MembershipState.ACTIVE);
+        LocalDateTime now = LocalDateTime.now(ZoneId.of(timezone));
+        List<MyEventResponse> results = new ArrayList<>();
+        Set<Long> seenIds = new HashSet<>();
+
+        for (Event event : ownedEvents) {
+            if (seenIds.add(event.getId())) {
+                results.add(new MyEventResponse(eventMapper.toResponse(event), EventRole.EVENT_ADMIN, true));
+            }
+        }
+        for (EventMembership membership : memberships) {
+            if (now.isBefore(membership.getValidFrom()) ||
+                    (membership.getValidUntil() != null && !now.isBefore(membership.getValidUntil()))) {
+                continue;
+            }
+            Event event = membership.getEvent();
+            if (membership.getRole() == EventRole.STAFF &&
+                    (event.getEventState() == EventState.FINISHED || !now.isBefore(event.getEndDateTime()))) {
+                continue;
+            }
+            if (seenIds.add(event.getId())) {
+                results.add(new MyEventResponse(eventMapper.toResponse(event), membership.getRole(), false));
+            }
+        }
+        return results;
     }
 
     @Transactional
     public void deleteEventById(Long id, User admin) {
-        Event event = eventRepository.findById(id).orElseThrow(() -> new EventNotFoundException("Event not found with id: " + id));
-        if(!event.getUser().getId().equals(admin.getId())) {
-            throw new AccessDeniedException("User is not authorized to delete this event");
-        }
+        Event event = eventRepository.findDistinctById(id).orElseThrow(() -> new EventNotFoundException("Event not found with id: " + id));
+        authEventService.checkUserAccess(id, admin.getId());
         if(event.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Cannot delete a finished event");
         }
-        eventRepository.deleteById(id);
+        if (bookingRepository.countByEventId(id) > 0) {
+            throw new EventDeletionException("Non puoi eliminare un evento con prenotazioni: chiudilo per conservare le statistiche.");
+        }
+        staffAccessService.deleteForEvent(id);
+        eventJoinService.deleteForEvent(id);
+        eventInvitationService.deleteForEvent(id);
+        eventMembershipRepository.deleteAll(eventMembershipRepository.findAllByEventId(id));
+        eventMembershipRepository.flush();
+        eventRepository.delete(event);
     }
     @Transactional
     public void incrementWalkInCount(Long eventId, User admin) {
-        Event event = eventRepository.findById(eventId)
+        Event event = eventRepository.findDistinctById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
-        if(!event.getUser().getId().equals(admin.getId())) {
-            throw new AccessDeniedException("User is not authorized to register walk-in attendee for this event");
-        }
+        authEventService.checkStaffAccess(eventId, admin.getId());
         if(event.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Cannot register walk-in attendee for a finished event");
         }
         event.setWalkInCount(event.getWalkInCount() + 1);
-        log.info("Walk-in attendee registered for Event ID: {} - New count: {}", eventId, event.getWalkInCount());
+        log.info("Walk-in attendee registered");
         eventRepository.save(event);
     }
 
     @Transactional
     public void decrementWalkInCount(Long eventId, User admin) {
-        Event event = eventRepository.findById(eventId)
+        Event event = eventRepository.findDistinctById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
-        if(!event.getUser().getId().equals(admin.getId())) {
-            throw new AccessDeniedException("User is not authorized to decrement walk-in attendee count for this event");
-        }
+        authEventService.checkStaffAccess(eventId, admin.getId());
         if(event.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Cannot register walk-in attendee for a finished event");
         }
@@ -153,7 +204,7 @@ public class EventService {
         double attendanceRate;
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
-        if (event.getUser().getId().equals(admin.getId())) {
+        authEventService.checkUserAccess(eventId, admin.getId());
             long totalBookings = bookingRepository.countByEventIdAndBookingStatusNot(eventId, BookingStatus.CANCELLED);
             long checkedInCount = bookingRepository.countByEventIdAndBookingStatus(eventId, BookingStatus.VALIDATED);
             long noShowCount = totalBookings - checkedInCount;
@@ -166,26 +217,50 @@ public class EventService {
             long totalAttendees = checkedInCount + event.getWalkInCount();
             double normalPrice = event.getNormalPrice() != null ? event.getNormalPrice() : 0.0;
             double totalRevenue = (checkedInCount * event.getBookingPrice()) + (event.getWalkInCount() * normalPrice);
-            return new EventDashboardResponse(eventId , event.getName(), event.getTotalTickets(), totalBookings, checkedInCount, noShowCount, attendanceRate, estimatedBookingRenueve, event.getWalkInCount(), totalAttendees, totalRevenue);
-
-        } else {
-            throw new AccessDeniedException("You are not the owner of this event");
-        }
+            return new EventDashboardResponse(
+                    eventId ,
+                    event.getName(),
+                    event.getTotalTickets(),
+                    totalBookings,
+                    checkedInCount,
+                    noShowCount,
+                    attendanceRate,
+                    estimatedBookingRenueve,
+                    event.getWalkInCount(),
+                    totalAttendees,
+                    totalRevenue);
 
     }
 
     @Transactional
     public void closeEvent(Long eventId, User admin) {
-        Event event = eventRepository.findById(eventId).orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
-        if (!event.getUser().getId().equals(admin.getId())) {
-            throw new AccessDeniedException("User is not authorized to close this event");
-        }
+        Event event = eventRepository.findDistinctById(eventId).orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
+        authEventService.checkUserAccess(eventId, admin.getId());
         if (event.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Event is already closed with id: " + eventId);
         }
+        finishEvent(event);
+    }
+
+    @Transactional
+    public void closeExpiredEvent(Long eventId) {
+        Event event = eventRepository.findDistinctById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
+        if (event.getEventState() == EventState.FINISHED ||
+                LocalDateTime.now(ZoneId.of(timezone)).isBefore(event.getEndDateTime())) {
+            return;
+        }
+        finishEvent(event);
+    }
+
+    private void finishEvent(Event event) {
+        Long eventId = event.getId();
         event.setEventState(EventState.FINISHED);
         eventRepository.save(event);
-        log.info("Event ID: {} closed by Admin ID: {} - Transitioned to FINISHED", eventId, admin.getId());
+        eventJoinService.expireRequestsForEvent(eventId);
+        eventInvitationService.revokePendingForEvent(eventId);
+        staffAccessService.expireForEvent(eventId);
+        log.info("Event closed and access credentials expired");
         bookingService.anonymizeBookingsByEventId(eventId);
     }
 

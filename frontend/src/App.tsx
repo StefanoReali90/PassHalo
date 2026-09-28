@@ -10,25 +10,32 @@ import './App.css';
 const AccountPage = lazy(() => import('./pages/AccountPage').then((module) => ({ default: module.AccountPage })));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })));
 const BookingPage = lazy(() => import('./pages/BookingPage').then((module) => ({ default: module.BookingPage })));
+const BookingEmbedPage = lazy(() => import('./pages/BookingEmbedPage').then((module) => ({ default: module.BookingEmbedPage })));
+const CollaborationsPage = lazy(() => import('./pages/CollaborationsPage').then((module) => ({ default: module.CollaborationsPage })));
 const BookingsPage = lazy(() => import('./pages/BookingsPage').then((module) => ({ default: module.BookingsPage })));
 const EventsPage = lazy(() => import('./pages/EventsPage').then((module) => ({ default: module.EventsPage })));
+const EventTeamPage = lazy(() => import('./pages/EventTeamPage').then((module) => ({ default: module.EventTeamPage })));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })));
+const MarketingUnsubscribePage = lazy(() => import('./pages/MarketingUnsubscribePage').then((module) => ({ default: module.MarketingUnsubscribePage })));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })));
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((module) => ({ default: module.RegisterPage })));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then((module) => ({ default: module.ResetPasswordPage })));
 const StaffScanPage = lazy(() => import('./pages/StaffScanPage').then((module) => ({ default: module.StaffScanPage })));
-const UsersPage = lazy(() => import('./pages/UsersPage').then((module) => ({ default: module.UsersPage })));
+const StaffAccessPage = lazy(() => import('./pages/StaffAccessPage').then((module) => ({ default: module.StaffAccessPage })));
 
 const pageTitles: Array<[string, string]> = [
     ['/admin/dashboard', 'Dashboard'],
     ['/admin/events', 'Eventi'],
+    ['/collaborations', 'Collaborazioni'],
     ['/admin/bookings', 'Prenotazioni'],
-    ['/admin/users', 'Staff'],
     ['/staff/scan', 'Controllo ingressi'],
+    ['/staff/access', 'Accesso staff'],
     ['/account', 'Sicurezza account'],
     ['/prenota', 'Prenota il tuo ingresso'],
+    ['/embed/booking', 'Modulo prenotazione'],
     ['/privacy', 'Privacy'],
+    ['/marketing/unsubscribe', 'Revoca consenso marketing'],
     ['/register', 'Registrazione organizzatore'],
     ['/forgot-password', 'Recupera password'],
     ['/reset-password', 'Nuova password'],
@@ -54,6 +61,12 @@ function PublicBookingLayout() {
     return <><header className="topbar"><Brand /></header><main id="main-content"><Outlet /></main></>;
 }
 
+function AppFooter() {
+    const { pathname } = useLocation();
+    if (pathname.startsWith('/embed/')) return null;
+    return <footer className="site-footer"><span>PassHalo</span><span>Il tuo evento, dall’inizio all’ingresso.</span><Link to="/privacy">Privacy</Link></footer>;
+}
+
 function RouteFallback() {
     return <div className="route-loader" role="status"><span className="spinner" />Caricamento pagina…</div>;
 }
@@ -76,22 +89,27 @@ export default function App() {
                                     <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                                     <Route path="/staff/scan" element={<ProtectedRoute roles={['ADMIN', 'STAFF']}><StaffScanPage /></ProtectedRoute>} />
+                                    <Route path="/collaborations" element={<ProtectedRoute><CollaborationsPage /></ProtectedRoute>} />
                                     <Route path="/account" element={<ProtectedRoute roles={['ADMIN', 'STAFF']}><AccountPage /></ProtectedRoute>} />
-                                    <Route path="/admin/dashboard" element={<ProtectedRoute roles={['ADMIN']}><AdminDashboardPage /></ProtectedRoute>} />
-                                    <Route path="/admin/events" element={<ProtectedRoute roles={['ADMIN']}><EventsPage /></ProtectedRoute>} />
-                                    <Route path="/admin/bookings" element={<ProtectedRoute roles={['ADMIN']}><BookingsPage /></ProtectedRoute>} />
-                                    <Route path="/admin/users" element={<ProtectedRoute roles={['ADMIN']}><UsersPage /></ProtectedRoute>} />
+                                    <Route path="/admin/dashboard" element={<ProtectedRoute eventAdmin><AdminDashboardPage /></ProtectedRoute>} />
+                                    <Route path="/admin/events" element={<ProtectedRoute eventAdmin><EventsPage /></ProtectedRoute>} />
+                                    <Route path="/admin/events/:eventId/team" element={<ProtectedRoute eventAdmin><EventTeamPage /></ProtectedRoute>} />
+                                    <Route path="/admin/bookings" element={<ProtectedRoute eventAdmin><BookingsPage /></ProtectedRoute>} />
                                 </Route>
 
+                                <Route path="/embed/booking/:eventId" element={<BookingEmbedPage />} />
+
                                 <Route element={<PublicBookingLayout />}>
+                                    <Route path="/staff/access" element={<StaffAccessPage />} />
                                     <Route path="/prenota" element={<BookingPage />} />
                                     <Route path="/privacy" element={<PrivacyPage />} />
+                                    <Route path="/marketing/unsubscribe" element={<MarketingUnsubscribePage />} />
                                     <Route path="/check-in" element={<Navigate to="/prenota" replace />} />
                                     <Route path="*" element={<div className="form-page"><span className="eyebrow">404</span><h1>Pagina non trovata.</h1><p>Controlla il link che hai ricevuto.</p></div>} />
                                 </Route>
                             </Routes>
                         </Suspense>
-                        <footer className="site-footer"><span>PassHalo</span><span>Il tuo evento, dall’inizio all’ingresso.</span><Link to="/privacy">Privacy</Link></footer>
+                        <AppFooter />
                     </div>
                 </AuthProvider>
             </BrowserRouter>

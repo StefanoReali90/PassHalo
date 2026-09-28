@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { BarChart3, CalendarCheck, CalendarDays, LogIn, LogOut, QrCode, Settings, Ticket, UserPlus } from 'lucide-react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { api } from './src/api';
 import { BookingScreen } from './src/screens/BookingScreen';
 import { BookingsScreen } from './src/screens/BookingsScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -45,14 +46,32 @@ const staffTabs: TabDefinition[] = [
 function PassHaloApp() {
   const { user, loading, logout } = useAuth();
   const [screen, setScreen] = useState<ScreenName>('booking');
+  const [eventAdminAccess, setEventAdminAccess] = useState<{ email: string; allowed: boolean } | null>(null);
 
-  const tabs = useMemo(() => user?.role === 'ADMIN' ? adminTabs : user?.role === 'STAFF' ? staffTabs : publicTabs, [user]);
+  const canManageEvents = !!user && (user.role === 'ADMIN' ||
+    (eventAdminAccess?.email === user.email && eventAdminAccess.allowed));
+  const tabs = useMemo(() => canManageEvents ? adminTabs : user?.role === 'STAFF' ? staffTabs : publicTabs,
+    [canManageEvents, user]);
+
+  useEffect(() => {
+    if (!user || user.role === 'ADMIN') {
+      setEventAdminAccess(null);
+      return;
+    }
+    let active = true;
+    api.myEvents().then((events) => {
+      if (active) setEventAdminAccess({ email: user.email, allowed: events.some((event) => event.role === 'EVENT_ADMIN') });
+    }).catch(() => {
+      if (active) setEventAdminAccess({ email: user.email, allowed: false });
+    });
+    return () => { active = false; };
+  }, [user]);
 
   useEffect(() => {
     if (!user && !publicTabs.some((tab) => tab.key === screen)) setScreen('booking');
     if (user?.role === 'ADMIN' && !adminTabs.some((tab) => tab.key === screen)) setScreen('dashboard');
-    if (user?.role === 'STAFF' && !staffTabs.some((tab) => tab.key === screen)) setScreen('scanner');
-  }, [screen, user]);
+    if (user?.role === 'STAFF' && !tabs.some((tab) => tab.key === screen)) setScreen('scanner');
+  }, [screen, tabs, user]);
 
   if (loading) {
     return (
@@ -91,10 +110,10 @@ function PassHaloApp() {
         {screen === 'booking' ? <BookingScreen onOpenSettings={() => setScreen('settings')} /> : null}
         {screen === 'login' ? <LoginScreen onOpenSettings={() => setScreen('settings')} onLoggedIn={(loggedUser) => openAfterLogin(loggedUser.role)} /> : null}
         {screen === 'register' ? <RegisterScreen onLogin={() => setScreen('login')} onOpenSettings={() => setScreen('settings')} /> : null}
-        {screen === 'dashboard' && user?.role === 'ADMIN' ? <DashboardScreen /> : null}
-        {screen === 'events' && user?.role === 'ADMIN' ? <EventsScreen /> : null}
+        {screen === 'dashboard' && canManageEvents ? <DashboardScreen /> : null}
+        {screen === 'events' && canManageEvents ? <EventsScreen canCreateEvent={user?.role === 'ADMIN'} /> : null}
         {screen === 'scanner' && user ? <ScannerScreen /> : null}
-        {screen === 'bookings' && user?.role === 'ADMIN' ? <BookingsScreen /> : null}
+        {screen === 'bookings' && canManageEvents ? <BookingsScreen /> : null}
         {screen === 'settings' ? <SettingsScreen /> : null}
       </View>
 

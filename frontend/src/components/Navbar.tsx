@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { CalendarDays, ChevronDown, KeyRound, LayoutDashboard, LogOut, Menu, Moon, ScanLine, Sun, TicketCheck, UsersRound, X } from 'lucide-react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Bell, CalendarDays, ChevronDown, KeyRound, LayoutDashboard, LogOut, Menu, Moon, ScanLine, Sun, TicketCheck, UsersRound, X } from 'lucide-react';
 import { Brand } from './Brand';
+import { EVENT_ACCESS_CHANGED, getMyEvents } from '../api/events';
+import { getStaffRequests } from '../api/staffAccess';
 import { useAuth } from '../context/useAuth';
 
 export function Navbar() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [open, setOpen] = useState(false);
     const [navOpen, setNavOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [theme, setTheme] = useState(() => localStorage.getItem('cp-theme') === 'light' ? 'light' : 'dark');
     const [accent, setAccent] = useState(() => localStorage.getItem('cp-accent') || 'lime');
+    const [eventAdminAccess, setEventAdminAccess] = useState<{ email: string; allowed: boolean } | null>(null);
+    const [staffNotices, setStaffNotices] = useState<{ email: string; events: Array<{ id: number; name: string; count: number }> } | null>(null);
+    const [noticesOpen, setNoticesOpen] = useState(false);
     const menu = useRef<HTMLDivElement>(null);
+    const noticesMenu = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
@@ -25,11 +32,13 @@ export function Navbar() {
     useEffect(() => {
         const close = (event: PointerEvent) => {
             if (!menu.current?.contains(event.target as Node)) setOpen(false);
+            if (!noticesMenu.current?.contains(event.target as Node)) setNoticesOpen(false);
         };
         const escape = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 setOpen(false);
                 setNavOpen(false);
+                setNoticesOpen(false);
                 menu.current?.querySelector('button')?.focus();
             }
         };
@@ -40,6 +49,39 @@ export function Navbar() {
             document.removeEventListener('keydown', escape);
         };
     }, []);
+
+    useEffect(() => {
+        if (!user) return;
+        let active = true;
+        const refreshAccess = () => {
+            void getMyEvents()
+                .then(async (events) => {
+                    if (!active) return;
+                    setEventAdminAccess({ email: user.email, allowed: events.some((event) => event.role === 'EVENT_ADMIN') });
+                    const owned = events.filter((event) => event.owner && event.eventState !== 'FINISHED');
+                    const results = await Promise.allSettled(owned.map((event) => getStaffRequests(event.id)));
+                    if (!active) return;
+                    setStaffNotices({ email: user.email, events: owned.flatMap((event, index) => {
+                        const result = results[index];
+                        return result.status === 'fulfilled' && result.value.length > 0
+                            ? [{ id: event.id, name: event.name, count: result.value.length }] : [];
+                    }) });
+                })
+                .catch(() => { if (active) { setEventAdminAccess({ email: user.email, allowed: false }); setStaffNotices({ email: user.email, events: [] }); } });
+        };
+        refreshAccess();
+        const timer = window.setInterval(refreshAccess, 15_000);
+        window.addEventListener(EVENT_ACCESS_CHANGED, refreshAccess);
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+            window.removeEventListener(EVENT_ACCESS_CHANGED, refreshAccess);
+        };
+    }, [user, location.pathname]);
+
+    const canManageEvents = user?.role === 'ADMIN' || (eventAdminAccess?.email === user?.email && eventAdminAccess?.allowed === true);
+    const pendingStaffEvents = staffNotices?.email === user?.email ? staffNotices?.events ?? [] : [];
+    const pendingStaffCount = pendingStaffEvents.reduce((total, event) => total + event.count, 0);
 
     const exit = async () => {
         setBusy(true);
@@ -60,15 +102,19 @@ export function Navbar() {
             <Brand />
             {user && (
                 <nav id="primary-navigation" aria-label="Navigazione area riservata" className={`nav-links ${navOpen ? 'is-open' : ''}`}>
-                    {user.role === 'ADMIN' && <NavLink to="/admin/dashboard" onClick={() => setNavOpen(false)}><LayoutDashboard size={16} />Dashboard</NavLink>}
-                    {user.role === 'ADMIN' && <NavLink to="/admin/events" onClick={() => setNavOpen(false)}><CalendarDays size={16} />Eventi</NavLink>}
-                    {user.role === 'ADMIN' && <NavLink to="/admin/bookings" onClick={() => setNavOpen(false)}><TicketCheck size={16} />Prenotazioni</NavLink>}
-                    {user.role === 'ADMIN' && <NavLink to="/admin/users" onClick={() => setNavOpen(false)}><UsersRound size={16} />Staff</NavLink>}
+                    {canManageEvents && <NavLink to="/admin/dashboard" onClick={() => setNavOpen(false)}><LayoutDashboard size={16} />Dashboard</NavLink>}
+                    {canManageEvents && <NavLink to="/admin/events" onClick={() => setNavOpen(false)}><CalendarDays size={16} />Eventi</NavLink>}
+                    {canManageEvents && <NavLink to="/admin/bookings" onClick={() => setNavOpen(false)}><TicketCheck size={16} />Prenotazioni</NavLink>}
+                    {canManageEvents && <NavLink to="/collaborations" onClick={() => setNavOpen(false)}><UsersRound size={16} />Collaborazioni</NavLink>}
                     <NavLink to="/staff/scan" onClick={() => setNavOpen(false)}><ScanLine size={16} />Ingressi</NavLink>
                 </nav>
             )}
 
             <div className="topbar-end">
+                {user && pendingStaffCount > 0 && <div className="staff-notifications" ref={noticesMenu}>
+                    <button className="icon-button staff-notification-trigger" type="button" aria-label={`${pendingStaffCount} richieste staff in attesa`} aria-expanded={noticesOpen} onClick={() => setNoticesOpen((current) => !current)}><Bell size={18} /><span className="staff-notification-count">{pendingStaffCount}</span></button>
+                    {noticesOpen && <div className="staff-notification-panel"><strong>Richieste staff in attesa</strong>{pendingStaffEvents.map((event) => <NavLink key={event.id} to={`/admin/events/${event.id}/team`} onClick={() => setNoticesOpen(false)}>{event.name}<span>{event.count}</span></NavLink>)}</div>}
+                </div>}
                 {user && (
                     <button
                         className="icon-button mobile-nav-toggle"

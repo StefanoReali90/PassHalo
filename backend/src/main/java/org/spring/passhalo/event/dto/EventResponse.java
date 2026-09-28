@@ -18,6 +18,7 @@ public record EventResponse(
         String location,
         EventState eventState,
         String videoUrl,
-        List<EventFaqDTO> faqs
+        List<EventFaqDTO> faqs,
+        String organizerName
 ) {
 }

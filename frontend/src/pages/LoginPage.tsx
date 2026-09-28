@@ -32,7 +32,7 @@ export function LoginPage() {
             <div className="form-intro">
                 <span className="eyebrow"><LockKeyhole size={14} /> Area riservata</span>
                 <h1>Bentornato<span className="accent-text">.</span></h1>
-                <p>Accedi per gestire l’evento o controllare gli ingressi.</p>
+                <p>Accedi con il tuo account per gestire gli eventi.</p>
             </div>
             <div className="panel form-panel">
                 <form onSubmit={submit}>
@@ -44,6 +44,7 @@ export function LoginPage() {
                     <button className="button primary full" disabled={busy || isLoading}>{busy ? 'Accesso in corso…' : 'Accedi'}<ArrowRight size={17} /></button>
                 </form>
                 <p className="form-note auth-switch">Nuovo organizzatore? <Link className="text-link" to="/register">Crea un account ADMIN</Link></p>
+                <p className="form-note auth-switch">Fai parte dello staff? <Link className="text-link" to="/staff/access">Entra con il codice dell’evento</Link></p>
             </div>
         </section>
     );

@@ -1,6 +1,7 @@
 package org.spring.passhalo.user.controller;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.user.dto.*;
 import org.spring.passhalo.user.service.UserService;
@@ -10,8 +11,9 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Value;
 
-import java.util.List;
+import java.time.Duration;
 
 @RestController
 @RequestMapping("/user")
@@ -20,41 +22,14 @@ public class UserController {
 
     private final UserService userService;
 
+    @Value("${application.security.jwt.expiration-time}")
+    private long jwtExpirationMillis;
+
 
     @PostMapping(path = "/register", consumes = "application/json", produces = "application/json")
     public ResponseEntity<UserResponse> registerUser(@Valid @RequestBody AdminRegistrationRequest request) {
         UserResponse response = userService.createUser(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @PostMapping(path = "/staff-register", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<UserResponse> registerStaffUser(@Valid @RequestBody StaffRegistrationRequest request) {
-        UserResponse response = userService.createStaffUser(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    @GetMapping(path = "/search", produces = "application/json")
-    public ResponseEntity<UserResponse> getUserByEmail(@RequestParam String email) {
-        UserResponse response = userService.getUserByEmail(email);
-        return ResponseEntity.ok(response);
-
-    }
-
-    @GetMapping(path = "/{id}", produces = "application/json")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
-        UserResponse response = userService.getUserById(id);
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping(path="", produces = "application/json")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
-    }
-
-    @DeleteMapping(path = "/{id}")
-    public ResponseEntity<Void> deleteUserById(@PathVariable Long id) {
-        userService.deleteUser(id);
-        return ResponseEntity.noContent().build();
     }
 
     @PostMapping(path = "/recover-password", consumes = "application/json", produces = "application/json")
@@ -63,9 +38,10 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping(path = "/{id}/change-password")
-    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest changePasswordRequest, @PathVariable Long id) {
-        userService.changePassword(changePasswordRequest, id);
+    @PatchMapping(path = "/me/change-password")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest changePasswordRequest,
+                                               Authentication authentication) {
+        userService.changePassword(changePasswordRequest, authentication.getName());
         return ResponseEntity.noContent().build();
     }
     @PatchMapping(path = "/reset-password")
@@ -75,12 +51,15 @@ public class UserController {
     }
 
     @PostMapping(path = "/login", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
+                                               HttpServletRequest httpRequest) {
         LoginResponse response = userService.login(request);
         ResponseCookie cookie = ResponseCookie.from("jwt", response.token())
                 .httpOnly(true)
+                .secure(httpRequest.isSecure())
+                .sameSite("Strict")
                 .path("/")
-                .maxAge(24 * 60 * 60) // 1 day
+                .maxAge(Duration.ofMillis(jwtExpirationMillis))
                 .build();
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -88,9 +67,11 @@ public class UserController {
     }
 
     @PostMapping(path="/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
         ResponseCookie cookie = ResponseCookie.from("jwt", "")
                 .httpOnly(true)
+                .secure(httpRequest.isSecure())
+                .sameSite("Strict")
                 .path("/")
                 .maxAge(0)
                 .build();

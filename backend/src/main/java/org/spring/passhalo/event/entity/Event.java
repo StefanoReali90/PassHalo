@@ -41,10 +41,10 @@ public class Event {
     @Column(nullable = false)
     private EventState eventState;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 4000)
     private String description;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 2048)
     private String imageUrl;
 
     @Column(nullable = false)

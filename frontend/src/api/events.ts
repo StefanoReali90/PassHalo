@@ -1,12 +1,18 @@
 import { apiFetch } from './client';
-import type { Event, EventDashboardResponse, EventRequest } from '../types';
+import type { Event, EventDashboardResponse, EventRequest, MyEvent } from '../types';
+
+export const EVENT_ACCESS_CHANGED = 'passhalo:event-access-changed';
+
+export function notifyEventAccessChanged() {
+    window.dispatchEvent(new Event(EVENT_ACCESS_CHANGED));
+}
 
 export function getEvents(): Promise<Event[]> {
     return apiFetch<Event[]>('/events');
 }
 
-export function getMyEvents(): Promise<Event[]> {
-    return apiFetch<Event[]>('/events/my-events');
+export function getMyEvents(): Promise<MyEvent[]> {
+    return apiFetch<MyEvent[]>('/events/my-events');
 }
 
 export function getEventById(eventId: number): Promise<Event> {

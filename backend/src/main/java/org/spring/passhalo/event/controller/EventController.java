@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.event.dto.EventDashboardResponse;
 import org.spring.passhalo.event.dto.EventRequest;
 import org.spring.passhalo.event.dto.EventResponse;
+import org.spring.passhalo.event.dto.MyEventResponse;
 import org.spring.passhalo.event.service.EventService;
 import org.spring.passhalo.user.entity.User;
 import org.springframework.http.HttpStatus;
@@ -43,15 +44,15 @@ public class EventController {
         return ResponseEntity.ok(eventResponse);
     }
 
-    @GetMapping(path = "", produces = "application/json")
+    @GetMapping(path = {"", "/"}, produces = "application/json")
     public ResponseEntity<List<EventResponse>> getAllEvents() {
         List<EventResponse> eventResponses = eventService.getAllEvents();
         return ResponseEntity.ok(eventResponses);
     }
 
     @GetMapping(path = "/my-events", produces = "application/json")
-    public ResponseEntity<List<EventResponse>> getEventsByUserId(@AuthenticationPrincipal User admin) {
-        List<EventResponse> eventResponses = eventService.getEventsByUser(admin.getId());
+    public ResponseEntity<List<MyEventResponse>> getEventsByUserId(@AuthenticationPrincipal User admin) {
+        List<MyEventResponse> eventResponses = eventService.getEventsByUser(admin.getId());
         return ResponseEntity.ok(eventResponses);
 
     }

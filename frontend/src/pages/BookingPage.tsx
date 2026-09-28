@@ -5,6 +5,7 @@ import { createBooking } from '../api/booking';
 import { getEvents } from '../api/events';
 import { EventHeroMedia } from '../components/EventHeroMedia';
 import type { BookingResponse, Event, EventFaq } from '../types';
+import { isEventBookable } from '../utils/eventAvailability';
 
 function formatEventDate(value: string) {
     return new Intl.DateTimeFormat('it-IT', {
@@ -79,16 +80,24 @@ export function BookingPage() {
 
     useEffect(() => {
         let active = true;
-        const requestedEventId = Number(new URLSearchParams(window.location.search).get('eventId'));
+        const eventIdParameter = new URLSearchParams(window.location.search).get('eventId');
+        const requestedEventId = eventIdParameter === null ? null : Number(eventIdParameter);
 
         getEvents()
             .then((availableEvents) => {
                 if (!active) return;
-                const bookableEvents = availableEvents.filter((event) => event.eventState !== 'FINISHED');
-                setEvents(bookableEvents);
-                const requestedIsAvailable = Number.isInteger(requestedEventId)
-                    && bookableEvents.some((event) => event.id === requestedEventId);
-                setSelectedEventId(requestedIsAvailable ? requestedEventId : bookableEvents[0]?.id ?? null);
+                const bookableEvents = availableEvents.filter(isEventBookable);
+                if (eventIdParameter !== null) {
+                    const requested = Number.isInteger(requestedEventId) && requestedEventId !== null && requestedEventId > 0
+                        ? bookableEvents.find((event) => event.id === requestedEventId)
+                        : undefined;
+                    setEvents(requested ? [requested] : []);
+                    setSelectedEventId(requested?.id ?? null);
+                    if (!requested) setError('Il link di prenotazione non è valido oppure l’evento non è più disponibile.');
+                } else {
+                    setEvents(bookableEvents);
+                    setSelectedEventId(bookableEvents[0]?.id ?? null);
+                }
             })
             .catch((requestError) => {
                 if (active) setError(requestError instanceof Error ? requestError.message : 'Impossibile caricare gli eventi.');
@@ -117,6 +126,11 @@ export function BookingPage() {
         event.preventDefault();
         if (selectedEventId === null) {
             setError('Seleziona un evento prima di prenotare.');
+            return;
+        }
+        const eventToBook = events.find((item) => item.id === selectedEventId);
+        if (!eventToBook || !isEventBookable(eventToBook)) {
+            setError('Le prenotazioni per questo evento sono chiuse.');
             return;
         }
 
@@ -260,8 +274,7 @@ export function BookingPage() {
 
                         {events.length > 0 && (
                             <div className="event-choice">
-                                <label htmlFor="event">Evento</label>
-                                <select
+                                {events.length > 1 && <><label htmlFor="event">Evento</label><select
                                     id="event"
                                     value={selectedEventId ?? ''}
                                     onChange={(event) => selectEvent(Number(event.target.value))}
@@ -270,7 +283,8 @@ export function BookingPage() {
                                     {events.map((availableEvent) => (
                                         <option key={availableEvent.id} value={availableEvent.id}>{availableEvent.name}</option>
                                     ))}
-                                </select>
+                                </select></>}
+                                {events.length === 1 && <strong>{selectedEvent?.name}</strong>}
                                 {selectedEvent && (
                                     <p className="event-meta">
                                         {formatEventDate(selectedEvent.startDateTime)} · {selectedEvent.location}<br />
@@ -283,7 +297,7 @@ export function BookingPage() {
                         )}
 
                         {eventsLoading && <div className="notice" role="status">Caricamento eventi…</div>}
-                        {!eventsLoading && events.length === 0 && <div className="notice error" role="alert">Non ci sono eventi disponibili per la prenotazione.</div>}
+                        {!eventsLoading && events.length === 0 && !error && <div className="notice error" role="alert">Non ci sono eventi disponibili per la prenotazione.</div>}
 
                         <div className="form-section-title"><span>01 / I tuoi dati</span><span>Telefono facoltativo</span></div>
                         <form onSubmit={submit}>
@@ -294,10 +308,10 @@ export function BookingPage() {
                             <label>Email<input name="email" type="email" autoComplete="email" placeholder="nome@esempio.it" required /></label>
                             <label>Telefono <span className="optional-label">Facoltativo</span><input name="phone" type="tel" autoComplete="tel" placeholder="+39 333 1234567" /></label>
                             <label className="checkbox-label required-consent">
-                                <input name="privacyAcknowledgement" type="checkbox" required />
-                                <span>Ho letto l’<Link className="text-link" to="/privacy" target="_blank" rel="noreferrer">informativa privacy</Link> sul trattamento dei dati. <small>Obbligatorio</small></span>
+                                <input key={`privacy-${selectedEventId}`} name="privacyAcknowledgement" type="checkbox" required />
+                                <span>Ho letto l’<Link className="text-link" to={selectedEvent ? `/privacy?eventId=${selectedEvent.id}` : '/privacy'} target="_blank" rel="noreferrer">informativa privacy</Link> sul trattamento dei dati. <small>Obbligatorio</small></span>
                             </label>
-                            <label className="checkbox-label"><input name="marketingConsent" type="checkbox" /><span>Desidero ricevere aggiornamenti sui prossimi eventi. <small>Facoltativo</small></span></label>
+                            <label className="checkbox-label"><input key={`marketing-${selectedEventId}`} name="marketingConsent" type="checkbox" /><span>Desidero ricevere via email aggiornamenti sui prossimi eventi di {selectedEvent?.organizerName ?? 'questo organizzatore'}. <small>Facoltativo</small></span></label>
                             <p className="form-note">I dati della prenotazione servono a generare il pass e verificare il tuo ingresso.</p>
                             <button className="button primary full" disabled={busy || eventsLoading || selectedEventId === null}>
                                 {busy ? 'Creazione del pass…' : 'Ottieni il tuo pass'} <ArrowRight size={18} />

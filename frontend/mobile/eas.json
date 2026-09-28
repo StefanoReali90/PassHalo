@@ -10,6 +10,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://passhalo.it/api"
+      },
       "android": {
         "buildType": "apk"
       }

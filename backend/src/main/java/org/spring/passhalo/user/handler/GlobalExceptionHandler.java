@@ -24,7 +24,7 @@ public class GlobalExceptionHandler {
                 ex.getStatus(),
                 ex.getMessage()
         );
-        log.warn("Business exception occurred - Status: {}, Message: {}", ex.getStatus(), ex.getMessage());
+        log.warn("Business exception occurred - Status: {}", ex.getStatus());
         problemDetail.setTitle("Errore");
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
@@ -35,7 +35,7 @@ public class GlobalExceptionHandler {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR,"Si è verificato un errore interno"
         );
-        log.error("Unhandled exception occurred: ", ex);
+        log.error("Unhandled exception occurred - Type: {}", ex.getClass().getSimpleName());
         problemDetail.setTitle("Errore interno");
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
@@ -47,7 +47,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Dati di input non validi"
         );
-        log.warn("Validation error on request: {}", problemDetail.getDetail());
+        log.warn("Request validation failed");
         problemDetail.setTitle("Errore di validazione");
         problemDetail.setProperty("timestamp", Instant.now());
         problemDetail.setProperty("errors", ex.getBindingResult().getFieldErrors().stream()
@@ -74,7 +74,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Dati di input non validi"
         );
-        log.warn("Malformed JSON request: {}", problemDetail.getDetail());
+        log.warn("Request JSON parsing failed");
         problemDetail.setTitle("Errore di parsing JSON");
         problemDetail.setProperty("timestamp", Instant.now());
         return ResponseEntity.badRequest().body(problemDetail);
