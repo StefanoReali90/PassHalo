@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.spring.passhalo.user.entity.EventInvitation;
 import org.spring.passhalo.user.enums.EventRole;
+import org.spring.passhalo.event.repository.EventRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -13,6 +14,7 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
+import java.io.UnsupportedEncodingException;
 
 @Service
 @RequiredArgsConstructor
@@ -26,13 +28,16 @@ public class EmailService {
     private String frontendBaseUrl;
 
     private final JavaMailSender mailSender;
+    private final OwnerSmtpSettingsService smtpSettings;
+    private final EventRepository eventRepository;
 
     public void sendBookingConfirmation(Long eventId, String to, String customerName, String eventName,
                                         byte[] qrCodeBytes, String unsubscribeToken) {
         try {
-            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            OwnerSmtpSettingsService.MailRoute route = routeForEvent(eventId);
+            MimeMessage mimeMessage = route.sender().createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-            helper.setFrom(from);
+            helper.setFrom(route.fromEmail(), route.fromName());
             helper.setTo(to);
             helper.setSubject("Conferma prenotazione per " + eventName);
             String body = "Gentile " + customerName + ",\n\nLa tua prenotazione per l'evento " + eventName + " è stata confermata.\n\nAllegato il codice QR per il tuo ingresso.";
@@ -42,10 +47,10 @@ public class EmailService {
             }
             helper.setText(body);
             helper.addAttachment("passhalo_ticket.png", new ByteArrayResource(qrCodeBytes));
-            mailSender.send(mimeMessage);
+            route.sender().send(mimeMessage);
 
 
-        } catch (MessagingException | RuntimeException e) {
+        } catch (MessagingException | UnsupportedEncodingException | RuntimeException e) {
             log.error("Invio email conferma prenotazione fallito eventoId={} errore={}",
                     eventId, e.getClass().getSimpleName());
             throw new IllegalStateException("Invio email conferma prenotazione fallito");
@@ -64,16 +69,17 @@ public class EmailService {
             role="Staff";
         }
         try {
-            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            OwnerSmtpSettingsService.MailRoute route = routeForEvent(eventInvitation.getEvent().getId());
+            MimeMessage mimeMessage = route.sender().createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "UTF-8");
 
-            helper.setFrom(from);
+            helper.setFrom(route.fromEmail(), route.fromName());
             helper.setTo(eventInvitation.getRecipientEmail());
             helper.setSubject("Invito a collaborare all’evento: " + eventName);
             helper.setText("Sei stato invitato a collaborare all’evento " + eventName +" come "+ role + ".\n  Accetta l’invito entro " + expiresAt+".\n Per poter accettare accedi all'app e inserisci il codice: " + token);
-            mailSender.send(mimeMessage);
+            route.sender().send(mimeMessage);
             log.info("Email invito collaborazione inviata eventoId={}", eventInvitation.getEvent().getId());
-        } catch (MessagingException | RuntimeException e) {
+        } catch (MessagingException | UnsupportedEncodingException | RuntimeException e) {
             log.error("Invio email invito collaborazione fallito eventoId={} errore={}",
                     eventInvitation.getEvent().getId(), e.getClass().getSimpleName());
             throw new IllegalStateException("Invio email invito collaborazione fallito");
@@ -99,5 +105,12 @@ public class EmailService {
             log.error("Invio email ripristino password fallito errore={}", exception.getClass().getSimpleName());
             throw new IllegalStateException("Invio email ripristino password fallito");
         }
+    }
+
+    private OwnerSmtpSettingsService.MailRoute routeForEvent(Long eventId) {
+        Long ownerId = eventRepository.findOwnerIdByEventId(eventId)
+                .orElseThrow(() -> new IllegalStateException("Evento email non trovato"));
+        return smtpSettings.route(ownerId)
+                .orElseGet(() -> new OwnerSmtpSettingsService.MailRoute(mailSender, from, "PassHalo"));
     }
 }

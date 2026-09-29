@@ -19,7 +19,42 @@ export interface BrevoStatus {
   pendingContacts: number;
 }
 
+export interface SmtpSettings {
+  configured: boolean;
+  host: string | null;
+  port: number | null;
+  encryption: 'STARTTLS' | 'SSL' | null;
+  username: string | null;
+  fromEmail: string | null;
+  fromName: string | null;
+}
+
+export interface SmtpSettingsInput {
+  host: string;
+  port: number;
+  encryption: 'STARTTLS' | 'SSL';
+  username: string;
+  password: string;
+  fromEmail: string;
+  fromName: string;
+}
+
 export const api = {
+  smtpStatus() {
+    return apiFetch<SmtpSettings>('/account/smtp');
+  },
+
+  saveSmtp(settings: SmtpSettingsInput) {
+    return apiFetch<SmtpSettings>('/account/smtp', { method: 'PUT', body: JSON.stringify(settings) });
+  },
+
+  removeSmtp() {
+    return apiFetch<void>('/account/smtp', { method: 'DELETE' });
+  },
+
+  testSmtp() {
+    return apiFetch<void>('/account/smtp/test', { method: 'POST', timeoutMs: 30_000 });
+  },
   brevoStatus() {
     return apiFetch<BrevoStatus>('/marketing/brevo');
   },

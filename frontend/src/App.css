@@ -95,6 +95,7 @@ a.brand:hover {
 }
 
 .management-form input,
+.management-form select,
 .management-form textarea,
 .lookup-forms input,
 .filter-panel input,
@@ -117,6 +118,7 @@ a.brand:hover {
 }
 
 .management-form input:focus,
+.management-form select:focus,
 .management-form textarea:focus,
 .lookup-forms input:focus,
 .filter-panel input:focus,

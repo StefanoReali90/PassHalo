@@ -18,6 +18,9 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     Optional<Event> findDistinctById(Long id);
     List<Event> findByUserId(Long userId);
 
+    @Query("select e.user.id from Event e where e.id = :eventId")
+    Optional<Long> findOwnerIdByEventId(Long eventId);
+
     @Query("select e.id from Event e where e.eventState <> :finished and e.endDateTime <= :now")
     List<Long> findEndedEventIds(EventState finished, LocalDateTime now);
 }
