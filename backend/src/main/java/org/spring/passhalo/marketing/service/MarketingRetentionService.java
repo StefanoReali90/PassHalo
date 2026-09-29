@@ -27,6 +27,6 @@ public class MarketingRetentionService {
             }
         }
         long deleted = marketingRepository.deleteByExpiresAtBefore(LocalDateTime.now());
-        if (deleted > 0) log.info("Expired marketing records removed: {}", deleted);
+        if (deleted > 0) log.info("Consensi marketing scaduti rimossi numero={}", deleted);
     }
 }

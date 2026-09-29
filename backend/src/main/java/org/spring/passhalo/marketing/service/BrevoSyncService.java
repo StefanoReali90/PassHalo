@@ -71,7 +71,7 @@ public class BrevoSyncService {
                 }));
             } catch (RuntimeException exception) {
                 // No contact, key, or response body is included in logs.
-                log.warn("Brevo sync job {} failed: {}", id, exception.getClass().getSimpleName());
+                log.warn("Sincronizzazione Brevo fallita jobId={} errore={}", id, exception.getClass().getSimpleName());
                 transactions.executeWithoutResult(status -> jobRepository.findById(id).ifPresent(job -> {
                     job.setUpdatedAt(LocalDateTime.now());
                     jobRepository.save(job);

@@ -28,7 +28,7 @@ public class EventLifecycleScheduler {
             try {
                 eventService.closeExpiredEvent(eventId);
             } catch (RuntimeException exception) {
-                log.error("Unable to close ended event {} - Error type: {}", eventId,
+                log.error("Chiusura automatica fallita eventoId={} errore={}", eventId,
                         exception.getClass().getSimpleName());
             }
         }

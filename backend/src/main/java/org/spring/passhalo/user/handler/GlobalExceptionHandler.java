@@ -24,7 +24,7 @@ public class GlobalExceptionHandler {
                 ex.getStatus(),
                 ex.getMessage()
         );
-        log.warn("Business exception occurred - Status: {}", ex.getStatus());
+        log.debug("Richiesta rifiutata stato={} tipo={}", ex.getStatus().value(), ex.getClass().getSimpleName());
         problemDetail.setTitle("Errore");
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
@@ -35,7 +35,8 @@ public class GlobalExceptionHandler {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR,"Si è verificato un errore interno"
         );
-        log.error("Unhandled exception occurred - Type: {}", ex.getClass().getSimpleName());
+        StackTraceElement origin = ex.getStackTrace().length > 0 ? ex.getStackTrace()[0] : null;
+        log.error("Errore interno non gestito tipo={} origine={}", ex.getClass().getSimpleName(), origin);
         problemDetail.setTitle("Errore interno");
         problemDetail.setProperty("timestamp", Instant.now());
         return problemDetail;
@@ -47,7 +48,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Dati di input non validi"
         );
-        log.warn("Request validation failed");
+        log.debug("Validazione richiesta fallita");
         problemDetail.setTitle("Errore di validazione");
         problemDetail.setProperty("timestamp", Instant.now());
         problemDetail.setProperty("errors", ex.getBindingResult().getFieldErrors().stream()
@@ -63,7 +64,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.UNAUTHORIZED,
                 "Credenziali non valide"
         );
-        log.warn("Authentication failed: invalid credentials attempt");
+        log.warn("Autenticazione rifiutata motivo=credenziali_non_valide");
         problemDetail.setTitle("Errore di autenticazione");
         problemDetail.setProperty("timestamp", Instant.now());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problemDetail);
@@ -74,7 +75,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Dati di input non validi"
         );
-        log.warn("Request JSON parsing failed");
+        log.debug("Parsing JSON richiesta fallito");
         problemDetail.setTitle("Errore di parsing JSON");
         problemDetail.setProperty("timestamp", Instant.now());
         return ResponseEntity.badRequest().body(problemDetail);

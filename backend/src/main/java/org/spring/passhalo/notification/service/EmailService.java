@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
@@ -28,8 +27,8 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Async
-    public void sendBookingConfirmation(String to, String customerName, String eventName, byte[] qrCodeBytes, String unsubscribeToken) {
+    public void sendBookingConfirmation(Long eventId, String to, String customerName, String eventName,
+                                        byte[] qrCodeBytes, String unsubscribeToken) {
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
@@ -46,10 +45,10 @@ public class EmailService {
             mailSender.send(mimeMessage);
 
 
-            log.info("Booking confirmation email sent");
-        } catch (MessagingException e) {
-            log.error("Failed to send booking confirmation email - Error type: {}", e.getClass().getSimpleName());
-            throw new RuntimeException(e);
+        } catch (MessagingException | RuntimeException e) {
+            log.error("Invio email conferma prenotazione fallito eventoId={} errore={}",
+                    eventId, e.getClass().getSimpleName());
+            throw new IllegalStateException("Invio email conferma prenotazione fallito");
         }
     }
 
@@ -73,9 +72,11 @@ public class EmailService {
             helper.setSubject("Invito a collaborare all’evento: " + eventName);
             helper.setText("Sei stato invitato a collaborare all’evento " + eventName +" come "+ role + ".\n  Accetta l’invito entro " + expiresAt+".\n Per poter accettare accedi all'app e inserisci il codice: " + token);
             mailSender.send(mimeMessage);
-        } catch (MessagingException e) {
-            log.error("Failed to send event invitation email - Error type: {}", e.getClass().getSimpleName());
-            throw new RuntimeException(e);
+            log.info("Email invito collaborazione inviata eventoId={}", eventInvitation.getEvent().getId());
+        } catch (MessagingException | RuntimeException e) {
+            log.error("Invio email invito collaborazione fallito eventoId={} errore={}",
+                    eventInvitation.getEvent().getId(), e.getClass().getSimpleName());
+            throw new IllegalStateException("Invio email invito collaborazione fallito");
 
         }
 
@@ -93,10 +94,10 @@ public class EmailService {
                     + frontendBaseUrl.replaceAll("/$", "") + "/reset-password#token=" + token
                     + "\n\nSe non hai fatto questa richiesta, ignora questa email.");
             mailSender.send(message);
-            log.info("Password reset email sent");
-        } catch (MessagingException exception) {
-            log.error("Failed to send password reset email - Error type: {}", exception.getClass().getSimpleName());
-            throw new IllegalStateException("Unable to send password reset email", exception);
+            log.info("Email ripristino password inviata");
+        } catch (MessagingException | RuntimeException exception) {
+            log.error("Invio email ripristino password fallito errore={}", exception.getClass().getSimpleName());
+            throw new IllegalStateException("Invio email ripristino password fallito");
         }
     }
 }

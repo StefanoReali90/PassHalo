@@ -17,7 +17,11 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     }
 
     componentDidCatch(error: Error, info: ErrorInfo) {
-        console.error('Errore non gestito nell’interfaccia PassHalo', error, info);
+        const component = info.componentStack?.match(/^\s*at\s+([\w$]+)/m)?.[1] || 'sconosciuto';
+        console.error('[PassHalo] Errore non gestito nell’interfaccia', {
+            tipo: error.name,
+            componente: component,
+        });
     }
 
     render() {
