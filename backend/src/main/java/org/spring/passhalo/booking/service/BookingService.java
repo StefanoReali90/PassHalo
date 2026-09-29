@@ -172,6 +172,32 @@ public class BookingService {
     }
 
     @Transactional
+    public void requestQrResend(Long eventId, UUID uuid, User owner) {
+        Event event = eventRepository.findDistinctById(eventId)
+                .orElseThrow(() -> new EventNotFoundException("Event not found"));
+        if (owner == null || !event.getUser().getId().equals(owner.getId())) {
+            throw new AccessDeniedException("Only the event owner can resend booking QR codes");
+        }
+        if (event.getEventState() == EventState.FINISHED ||
+                !LocalDateTime.now(ZoneId.of(timeZone)).isBefore(event.getEndDateTime())) {
+            throw new EventFinishedException("The event is finished and its QR codes cannot be resent");
+        }
+
+        // Lock the booking so simultaneous owner requests cannot insert duplicate confirmation jobs.
+        Booking booking = bookingRepository.findForCheckInByUuid(uuid)
+                .filter(found -> found.getEvent().getId().equals(eventId))
+                .orElseThrow(() -> new BookingNotFoundException("Booking not found for this event"));
+        if (booking.getBookingStatus() != BookingStatus.CREATED ||
+                booking.getEmailCiphertext() == null || booking.getNameCiphertext() == null) {
+            throw new BookingResendUnavailableException("This booking cannot receive a QR confirmation");
+        }
+
+        if (bookingConfirmationQueueService.enqueueIfAbsent(booking)) {
+            log.info("Reinvio QR accodato eventoId={}", eventId);
+        }
+    }
+
+    @Transactional
     public CheckInResponse checkInBookingForEvent(UUID uuid, Long eventId, User user) {
         Booking booking = bookingRepository.findForCheckInByUuid(uuid)
                 .orElseThrow(() -> new BookingNotFoundException("Booking not found"));

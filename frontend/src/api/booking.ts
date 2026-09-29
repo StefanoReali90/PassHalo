@@ -10,6 +10,10 @@ export function createBooking(data: BookingRequest): Promise<BookingResponse> {
     });
 }
 
+export function resendBookingQr(eventId: number, uuid: string): Promise<void> {
+    return apiFetch<void>(`/bookings/events/${eventId}/${segment(uuid)}/resend-qr`, { method: 'POST' });
+}
+
 export function getBookingByUUID(uuid: string): Promise<BookingResponse> {
     return apiFetch<BookingResponse>(`/bookings/${segment(uuid)}`);
 }

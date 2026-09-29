@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowDown, ArrowRight, CalendarDays, Check, Clock3, Download, MapPin, ShieldCheck, Ticket, UsersRound, WalletCards } from 'lucide-react';
+import { ArrowDown, ArrowRight, CalendarDays, Check, Clock3, Download, Mail, MapPin, ShieldCheck, Ticket, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createBooking } from '../api/booking';
 import { getEvents } from '../api/events';
 import { EventHeroMedia } from '../components/EventHeroMedia';
 import type { BookingResponse, Event, EventFaq } from '../types';
 import { isEventBookable } from '../utils/eventAvailability';
+import { bookingResendMailto } from '../utils/bookingResend';
 
 function formatEventDate(value: string) {
     return new Intl.DateTimeFormat('it-IT', {
@@ -170,10 +171,14 @@ export function BookingPage() {
                     <p>{result.eventName}<br />{result.email}</p>
                     <img className="qr-image" src={qr} alt="QR code da mostrare all’ingresso" />
                     <p className="form-note">Mostra questo codice al personale all’ingresso.</p>
-                    <p className="form-note">Se non ricevi l’email con il QR code, scrivi a <a className="text-link" href="mailto:booking@passhalo.it">booking@passhalo.it</a>. Puoi comunque scaricare il QR qui.</p>
+                    <p className="form-note">Se l’email non arriva, controlla anche lo spam. Puoi scaricare il QR qui oppure preparare una richiesta a booking@passhalo.it.</p>
                     <a className="button primary full" href={qr} download={`PassHalo-${result.uuid}.png`}>
                         <Download size={17} /> Scarica il QR code
                     </a>
+                    <a className="button full" href={bookingResendMailto(result.eventName, result.email)}>
+                        <Mail size={17} /> Richiedi reinvio del codice QR
+                    </a>
+                    <p className="form-note">Si aprirà la tua app email: invia il messaggio per completare la richiesta.</p>
                     <button className="button full" onClick={() => setResult(null)}>Un’altra prenotazione</button>
                 </div>
             </section>
@@ -318,6 +323,7 @@ export function BookingPage() {
                                 {busy ? 'Creazione del pass…' : 'Ottieni il tuo pass'} <ArrowRight size={18} />
                             </button>
                         </form>
+                        <p className="form-note">Hai già prenotato ma non hai ricevuto il QR? <a className="text-link" href={bookingResendMailto(selectedEvent?.name)}>Richiedi il reinvio via email</a>.</p>
                         <div className="form-bottom"><Ticket size={16} /><span>Un pass personale. Un ingresso più semplice.</span></div>
                     </div>
                 </div>

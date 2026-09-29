@@ -31,6 +31,17 @@ function qrSource(value: string) {
   return value.startsWith('data:') ? value : `data:image/png;base64,${value}`;
 }
 
+function bookingResendMailto(eventName?: string, email?: string) {
+  const subject = encodeURIComponent('Richiesta reinvio codice QR PassHalo');
+  const body = encodeURIComponent([
+    'Buongiorno, non ho ricevuto il codice QR della mia prenotazione. Potete reinviarlo?',
+    '',
+    `Evento: ${eventName || '[nome evento]'}`,
+    `Email usata per la prenotazione: ${email || '[la tua email]'}`,
+  ].join('\n'));
+  return `mailto:booking@passhalo.it?subject=${subject}&body=${body}`;
+}
+
 export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
   const { apiBaseUrl } = useAuth();
   const [events, setEvents] = useState<PassHaloEvent[]>([]);
@@ -137,7 +148,9 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
           <Text style={styles.muted}>{result.eventName}</Text>
           <Image source={{ uri: qrSource(result.qrCodeBase64) }} style={styles.qr} resizeMode="contain" />
           <Text selectable style={styles.uuid}>{result.uuid}</Text>
-          <Text style={styles.muted}>Conserva questo QR. Se non ricevi l’email con il codice a {result.email}, scrivi a <Text selectable style={styles.privacyLink} onPress={() => void Linking.openURL('mailto:booking@passhalo.it')}>booking@passhalo.it</Text>. Puoi comunque usare il QR mostrato qui.</Text>
+          <Text style={styles.muted}>Conserva questo QR. Se l’email non arriva a {result.email}, controlla anche lo spam oppure prepara una richiesta a booking@passhalo.it.</Text>
+          <Button label="Richiedi reinvio del codice QR" onPress={() => void Linking.openURL(bookingResendMailto(result.eventName, result.email))} variant="secondary" />
+          <Text style={styles.muted}>Si aprirà la tua app email: invia il messaggio per completare la richiesta.</Text>
           <Button label="Crea un’altra prenotazione" onPress={reset} variant="secondary" />
         </Card>
       </ScrollView>
@@ -215,6 +228,7 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
                 <Switch value={marketingConsent} onValueChange={setMarketingConsent} trackColor={{ true: colors.accent }} thumbColor={marketingConsent ? colors.accentDark : colors.muted} />
               </View>
               <Button label="Conferma e genera il QR" onPress={submit} busy={submitting} />
+              <Text style={styles.muted}>Hai già prenotato ma non hai ricevuto il QR? <Text style={styles.privacyLink} onPress={() => void Linking.openURL(bookingResendMailto(selectedEvent?.name))}>Richiedi il reinvio via email</Text>.</Text>
             </Card>
           </>
         ) : null}

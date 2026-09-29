@@ -335,7 +335,7 @@ sudo journalctl -u caddy -n 100 --no-pager
 | Job GitHub `deploy` saltato | `DEPLOY_ENABLED` non è `true`, oppure il run è una pull request. |
 | Job `deploy` fallisce con SSH | Verifica `DEPLOY_HOST`, chiave privata completa, riga `DEPLOY_KNOWN_HOSTS` e test SSH dell'utente `deploy`. |
 | `passhalo` non parte | Leggi `journalctl`; controlla Java 25, file dei secret, password DB e `HIBERNATE_DDL_AUTO`. |
-| QR non arriva via email | Controlla SMTP, mittente verificato, spam e log `BookingConfirmationRetryScheduler`. L'invio viene ritentato; gli utenti possono scrivere a `booking@passhalo.it`. |
+| QR non arriva via email | Controlla SMTP, mittente verificato, spam e log `BookingConfirmationRetryScheduler`. L'invio viene ritentato; gli utenti possono scrivere a `booking@passhalo.it` e il proprietario dell'evento può accodare un reinvio dalla lista prenotazioni. |
 
 ## 12. Aggiornamenti, backup e APK
 
