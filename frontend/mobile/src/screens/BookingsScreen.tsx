@@ -13,9 +13,11 @@ const statusLabels = {
 
 export function BookingsScreen() {
   const [bookings, setBookings] = useState<BookingResponse[]>([]);
+  const [ownerEventIds, setOwnerEventIds] = useState<number[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [cancellingUuid, setCancellingUuid] = useState<string | null>(null);
+  const [resendingUuid, setResendingUuid] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -23,7 +25,9 @@ export function BookingsScreen() {
     setLoading(true);
     setError('');
     try {
-      setBookings(await api.bookings());
+      const result = await api.bookings();
+      setBookings(result.bookings);
+      setOwnerEventIds(result.ownerEventIds);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Prenotazioni non disponibili.');
     } finally {
@@ -69,6 +73,20 @@ export function BookingsScreen() {
     );
   };
 
+  const resendQr = async (booking: BookingResponse) => {
+    setResendingUuid(booking.uuid);
+    setError('');
+    setMessage('');
+    try {
+      await api.resendBookingQr(booking.eventId, booking.uuid);
+      setMessage(`Conferma QR per ${booking.name} ${booking.surname} in coda per l’invio a ${booking.email}.`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Reinvio del QR non riuscito.');
+    } finally {
+      setResendingUuid(null);
+    }
+  };
+
   return (
     <FlatList
       data={visibleBookings}
@@ -100,6 +118,9 @@ export function BookingsScreen() {
           <Text style={styles.event}>{item.eventName}</Text>
           <Text style={styles.date}>{new Date(item.createdAt).toLocaleString('it-IT')}</Text>
           <Text selectable numberOfLines={1} style={styles.uuid}>{item.uuid}</Text>
+          {item.bookingStatus === 'CREATED' && ownerEventIds.includes(item.eventId) ? (
+            <Button label="Reinvia codice QR" variant="secondary" busy={resendingUuid === item.uuid} disabled={resendingUuid !== null} onPress={() => void resendQr(item)} />
+          ) : null}
           {item.bookingStatus !== 'CANCELLED' ? (
             <Button label="Annulla prenotazione" variant="danger" busy={cancellingUuid === item.uuid} disabled={cancellingUuid !== null} onPress={() => askCancellation(item)} />
           ) : null}

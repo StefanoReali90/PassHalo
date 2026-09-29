@@ -28,6 +28,13 @@ public class BookingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(bookingResponse);
     }
 
+    @PostMapping(path = "/events/{eventId}/{uuid}/resend-qr")
+    public ResponseEntity<Void> resendQr(@PathVariable Long eventId, @PathVariable UUID uuid,
+                                         @AuthenticationPrincipal User owner) {
+        bookingService.requestQrResend(eventId, uuid, owner);
+        return ResponseEntity.accepted().build();
+    }
+
     @GetMapping(path = "/{uuid}", produces = "application/json")
     public ResponseEntity<BookingResponse> getBookingByUuid(@PathVariable UUID uuid, @AuthenticationPrincipal User admin) {
         BookingResponse bookingResponse = bookingService.getBookingByUuid(uuid, admin);

@@ -29,6 +29,16 @@ public class BookingConfirmationQueueService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public boolean enqueueIfAbsent(Booking booking) {
+        if (jobRepository.findByBookingId(booking.getId()).isPresent()) {
+            return false;
+        }
+        // The resend is transactional email. An existing queued confirmation retains its original unsubscribe token.
+        enqueue(booking, null);
+        return true;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public void discardForBooking(Long bookingId) {
         jobRepository.deleteByBookingId(bookingId);
     }

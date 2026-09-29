@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Download, Filter, RefreshCw, Search, TicketX } from 'lucide-react';
+import { Download, Filter, Mail, RefreshCw, Search, TicketX } from 'lucide-react';
 import {
     cancelBooking,
     getBookingById,
     getBookingByUUID,
     getBookingsByEventAndEmail,
     getBookingsByEventId,
+    resendBookingQr,
 } from '../api/booking';
 import { getMyEvents } from '../api/events';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -48,6 +49,7 @@ export function BookingsPage() {
     const [identifier, setIdentifier] = useState('');
     const [loading, setLoading] = useState(true);
     const [cancelling, setCancelling] = useState(false);
+    const [resendingUuid, setResendingUuid] = useState<string | null>(null);
     const [pendingCancellation, setPendingCancellation] = useState<BookingResponse | null>(null);
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
@@ -139,6 +141,20 @@ export function BookingsPage() {
         }
     };
 
+    const resendQr = async (booking: BookingResponse) => {
+        setResendingUuid(booking.uuid);
+        setError('');
+        setMessage('');
+        try {
+            await resendBookingQr(booking.eventId, booking.uuid);
+            setMessage(`Conferma QR per ${booking.name} ${booking.surname} in coda per l’invio a ${booking.email}.`);
+        } catch (requestError) {
+            setError(requestError instanceof Error ? requestError.message : 'Reinvio del QR non riuscito.');
+        } finally {
+            setResendingUuid(null);
+        }
+    };
+
     return (
         <section className="workspace-page">
             <div className="page-heading">
@@ -207,6 +223,9 @@ export function BookingsPage() {
                                         <td>
                                             <div className="table-actions">
                                                 <a className="icon-button" href={qrSource(booking.qrCodeBase64)} download={`PassHalo-${booking.uuid}.png`} aria-label="Scarica QR"><Download size={16} /></a>
+                                                {booking.bookingStatus === 'CREATED' && events.some((event) => event.id === booking.eventId && event.owner && event.eventState !== 'FINISHED') && (
+                                                    <button className="icon-button" onClick={() => void resendQr(booking)} disabled={resendingUuid !== null} title="Accoda un nuovo invio del QR" aria-label={`Reinvia il QR a ${booking.email}`}><Mail size={16} /></button>
+                                                )}
                                                 {booking.bookingStatus !== 'CANCELLED' && (
                                                     <button className="icon-button danger" onClick={() => setPendingCancellation(booking)} disabled={cancelling} aria-label={`Annulla la prenotazione di ${booking.name} ${booking.surname}`}><TicketX size={16} /></button>
                                                 )}

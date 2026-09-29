@@ -99,12 +99,16 @@ export const api = {
     });
   },
 
+  resendBookingQr(eventId: number, uuid: string) {
+    return apiFetch<void>(`/bookings/events/${eventId}/${segment(uuid)}/resend-qr`, { method: 'POST' });
+  },
+
   async bookings() {
     const events = (await api.myEvents()).filter((event) => event.role === 'EVENT_ADMIN');
     const groups = await Promise.all(events.map((event) =>
       apiFetch<BookingResponse[]>(`/bookings/events/${event.id}`),
     ));
-    return groups.flat();
+    return { bookings: groups.flat(), ownerEventIds: events.filter((event) => event.owner && event.eventState !== 'FINISHED').map((event) => event.id) };
   },
 
   cancelBooking(uuid: string) {

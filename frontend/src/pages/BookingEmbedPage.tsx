@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowRight, Check, Download, Ticket } from 'lucide-react';
+import { ArrowRight, Check, Download, Mail, Ticket } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { createBooking } from '../api/booking';
 import { getEventById } from '../api/events';
 import type { BookingResponse, Event } from '../types';
 import { isEventBookable } from '../utils/eventAvailability';
+import { bookingResendMailto } from '../utils/bookingResend';
 
 function formatEventDate(value: string) {
     return new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -103,10 +104,14 @@ export function BookingEmbedPage() {
                     <h1>Il tuo pass per {result.eventName}</h1>
                     <p>{result.name} {result.surname}<br />{result.email}</p>
                     <img className="qr-image" src={qr} alt="QR code personale per l’ingresso" />
-                    <p className="form-note">Mostra questo codice all’ingresso e conservalo. Se non ricevi l’email con il QR code, scrivi a <a className="text-link" href="mailto:booking@passhalo.it">booking@passhalo.it</a>.</p>
+                    <p className="form-note">Mostra questo codice all’ingresso e conservalo. Se l’email non arriva, controlla anche lo spam oppure prepara una richiesta a booking@passhalo.it.</p>
                     <a className="button primary full" href={qr} download={`PassHalo-${result.uuid}.png`}>
                         <Download size={17} /> Scarica il QR code
                     </a>
+                    <a className="button full" href={bookingResendMailto(result.eventName, result.email)}>
+                        <Mail size={17} /> Richiedi reinvio del codice QR
+                    </a>
+                    <p className="form-note">Si aprirà la tua app email: invia il messaggio per completare la richiesta.</p>
                 </section>
             </main>
         );
@@ -151,6 +156,7 @@ export function BookingEmbedPage() {
                         {busy ? 'Creazione del pass…' : 'Prenota'} <ArrowRight size={17} />
                     </button>
                 </form>}
+                {event && <p className="form-note">Hai già prenotato ma non hai ricevuto il QR? <a className="text-link" href={bookingResendMailto(event.name)}>Richiedi il reinvio via email</a>.</p>}
                 <p className="booking-embed-credit">Modulo prenotazioni gestito da <a href="/" target="_blank" rel="noreferrer">PassHalo</a></p>
             </section>
         </main>

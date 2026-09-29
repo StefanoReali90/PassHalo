@@ -42,7 +42,7 @@ I due terminali e il backend devono rimanere avviati per tutta la prova. L'indir
 - `/staff/scan`: check-in, disponibile a STAFF e ADMIN.
 - `/admin/dashboard`: statistiche, walk-in e chiusura evento.
 - `/admin/events`: creazione, lettura, modifica ed eliminazione eventi.
-- `/admin/bookings`: elenco, ricerche e annullamento prenotazioni.
+- `/admin/bookings`: elenco, ricerche e annullamento prenotazioni; il proprietario dell'evento può accodare un nuovo invio del QR.
 - `/account`: cambio password del proprio account.
 
 Tutte le richieste autenticate usano il cookie HttpOnly `jwt` tramite `credentials: 'include'`.

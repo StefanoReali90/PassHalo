@@ -79,6 +79,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/bookings", "/bookings/").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/bookings/events/{eventId}/{uuid}/resend-qr").authenticated()
                         .requestMatchers(HttpMethod.POST, "/marketing/unsubscribe").permitAll()
                         .requestMatchers(HttpMethod.POST, "/marketing/brevo/webhook/{ownerId}").permitAll()
                         .requestMatchers("/marketing/brevo", "/marketing/brevo/").hasRole("ADMIN")
