@@ -74,7 +74,7 @@ public class EventService {
         Event newEvent = eventMapper.toEntity(event);
         newEvent.setUser(admin);
         Event savedEvent = eventRepository.save(newEvent);
-        log.info("Event created successfully");
+        log.info("Evento creato eventoId={}", savedEvent.getId());
         return eventMapper.toResponse(savedEvent);
     }
     @Transactional
@@ -181,7 +181,7 @@ public class EventService {
             throw new EventFinishedException("Cannot register walk-in attendee for a finished event");
         }
         event.setWalkInCount(event.getWalkInCount() + 1);
-        log.info("Walk-in attendee registered");
+        log.info("Ingresso senza prenotazione registrato eventoId={} totale={}", eventId, event.getWalkInCount());
         eventRepository.save(event);
     }
 
@@ -196,6 +196,7 @@ public class EventService {
         if (event.getWalkInCount() > 0) {
             event.setWalkInCount(event.getWalkInCount() - 1);
             eventRepository.save(event);
+            log.info("Ingresso senza prenotazione rimosso eventoId={} totale={}", eventId, event.getWalkInCount());
         }
     }
 
@@ -260,8 +261,8 @@ public class EventService {
         eventJoinService.expireRequestsForEvent(eventId);
         eventInvitationService.revokePendingForEvent(eventId);
         staffAccessService.expireForEvent(eventId);
-        log.info("Event closed and access credentials expired");
         bookingService.anonymizeBookingsByEventId(eventId);
+        log.info("Evento chiuso e accessi scaduti eventoId={}", eventId);
     }
 
 }

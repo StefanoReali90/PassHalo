@@ -34,6 +34,6 @@ public class PersonalDataMigrationRunner implements ApplicationRunner {
                 marketingBatches++;
             }
         } while (migratedSubscribers > 0);
-        log.info("PII migration finished; booking batches: {}, marketing batches: {}", batches, marketingBatches);
+        log.info("Migrazione dati personali completata lottiPrenotazioni={} lottiMarketing={}", batches, marketingBatches);
     }
 }

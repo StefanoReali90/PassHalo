@@ -20,7 +20,7 @@ import org.spring.passhalo.event.exception.AccessDeniedException;
 import org.spring.passhalo.event.exception.EventNotFoundException;
 import org.spring.passhalo.event.repository.EventRepository;
 import org.spring.passhalo.marketing.service.MarketingService;
-import org.spring.passhalo.notification.service.EmailService;
+import org.spring.passhalo.notification.service.BookingConfirmationQueueService;
 import org.spring.passhalo.user.entity.User;
 import org.spring.passhalo.user.service.AuthEventService;
 
@@ -56,7 +56,7 @@ public class BookingServiceTest {
     private QrCodeService qrCodeService;
 
     @Mock
-    private EmailService emailService;
+    private BookingConfirmationQueueService bookingConfirmationQueueService;
 
     @Mock
     private MarketingService marketingService;
@@ -186,13 +186,12 @@ public class BookingServiceTest {
         when(bookingRepository.countByEventIdAndBookingStatusNot(1L, BookingStatus.CANCELLED)).thenReturn(0L);
         when(bookingRepository.save(any(Booking.class))).thenReturn(booking);
         when(qrCodeService.createQrCode(anyString())).thenReturn("mock-qr-base64");
-        when(qrCodeService.createQrCodeBytes(anyString())).thenReturn(new byte[]{1, 2, 3});
         when(bookingMapper.toResponse(eq(booking), anyString())).thenReturn(expectedResponse);
         BookingResponse response = bookingService.createBooking(request);
         assertNotNull(response);
         assertEquals(expectedResponse, response);
         verify(bookingRepository, times(1)).save(any(Booking.class));
-        verify(emailService, times(1)).sendBookingConfirmation(any(), any(), any(), any(), any());
+        verify(bookingConfirmationQueueService).enqueue(eq(booking), any());
         verify(marketingService, times(1)).registerConsent(any(), any(), any(), any(), any());
 
     }
@@ -243,6 +242,7 @@ public class BookingServiceTest {
         event.setId(11L);
         event.setUser(user);
         booking.setEvent(event);
+        booking.setId(8L);
         booking.setBookingStatus(BookingStatus.CREATED);
         booking.setUuid(bookingUuid);
         when(bookingRepository.findForCheckInByUuid(booking.getUuid())).thenReturn(Optional.of(booking));
@@ -250,6 +250,7 @@ public class BookingServiceTest {
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         verify(bookingRepository, times(1)).findForCheckInByUuid(booking.getUuid());
         verify(authEventService).checkUserAccess(event.getId(), user.getId());
+        verify(bookingConfirmationQueueService).discardForBooking(booking.getId());
     }
 
     @Test
@@ -261,7 +262,7 @@ public class BookingServiceTest {
         when(eventRepository.findDistinctById(1L)).thenReturn(Optional.of(event));
 
         assertThrows(EventFinishedException.class, () -> bookingService.createBooking(request));
-        verifyNoInteractions(cryptoService, emailService);
+        verifyNoInteractions(cryptoService, bookingConfirmationQueueService);
         verify(bookingRepository, never()).save(any());
     }
 

@@ -137,7 +137,7 @@ export function BookingScreen({ onOpenSettings }: { onOpenSettings(): void }) {
           <Text style={styles.muted}>{result.eventName}</Text>
           <Image source={{ uri: qrSource(result.qrCodeBase64) }} style={styles.qr} resizeMode="contain" />
           <Text selectable style={styles.uuid}>{result.uuid}</Text>
-          <Text style={styles.muted}>Conserva questo QR. Se l’email non arriva a {result.email}, puoi usare il codice mostrato qui.</Text>
+          <Text style={styles.muted}>Conserva questo QR. Se non ricevi l’email con il codice a {result.email}, scrivi a <Text selectable style={styles.privacyLink} onPress={() => void Linking.openURL('mailto:booking@passhalo.it')}>booking@passhalo.it</Text>. Puoi comunque usare il QR mostrato qui.</Text>
           <Button label="Crea un’altra prenotazione" onPress={reset} variant="secondary" />
         </Card>
       </ScrollView>

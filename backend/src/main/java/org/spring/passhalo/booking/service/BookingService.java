@@ -17,12 +17,11 @@ import org.spring.passhalo.event.exception.AccessDeniedException;
 import org.spring.passhalo.event.exception.EventNotFoundException;
 import org.spring.passhalo.event.repository.EventRepository;
 import org.spring.passhalo.marketing.service.MarketingService;
-import org.spring.passhalo.notification.service.EmailService;
+import org.spring.passhalo.notification.service.BookingConfirmationQueueService;
 import org.spring.passhalo.booking.exception.EventFinishedException;
 import org.spring.passhalo.user.entity.User;
 import org.spring.passhalo.user.service.AuthEventService;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +45,7 @@ public class BookingService {
     private final PiiCryptoService cryptoService;
     private final EventRepository eventRepository;
     private final QrCodeService qrCodeService;
-    private final EmailService emailService;
+    private final BookingConfirmationQueueService bookingConfirmationQueueService;
     private final MarketingService marketingService;
     private final AuthEventService authEventService;
 
@@ -80,9 +79,8 @@ public class BookingService {
             unsubscribeToken = marketingService.registerConsent(event.getUser(), event.getId(),
                     bookingRequest.name(), bookingRequest.surname(), bookingRequest.email());
         }
-        emailService.sendBookingConfirmation(bookingRequest.email(), bookingRequest.name(), event.getName(),
-                qrCodeService.createQrCodeBytes(savedBooking.getUuid().toString()), unsubscribeToken);
-        log.info("Booking has been created successfully");
+        bookingConfirmationQueueService.enqueue(savedBooking, unsubscribeToken);
+        log.info("Prenotazione creata eventoId={}", event.getId());
         return bookingMapper.toResponse(savedBooking, qrCode);
 
     }
@@ -160,8 +158,9 @@ public class BookingService {
             throw new AlreadyValidatedException("Booking already validated and cannot be canceled");
         }
         booking.setBookingStatus(BookingStatus.CANCELLED);
+        bookingConfirmationQueueService.discardForBooking(booking.getId());
 
-        log.info("Booking has been cancelled successfully");
+        log.info("Prenotazione annullata eventoId={}", booking.getEvent().getId());
     }
 
     @Transactional
@@ -202,15 +201,15 @@ public class BookingService {
             case CREATED:
                 booking.setBookingStatus((BookingStatus.VALIDATED));
                 booking.setCheckInDateTime(LocalDateTime.now());
-                log.info("Check-in successful");
+                log.info("Check-in convalidato eventoId={}", booking.getEvent().getId());
                 return bookingMapper.toCheckInResponse(booking);
             case VALIDATED:
-                log.warn("Check-in rejected: pass was already validated");
+                log.warn("Check-in rifiutato eventoId={} motivo=gia_convalidato", booking.getEvent().getId());
                 throw new AlreadyValidatedException("Booking already validated");
 
 
             case CANCELLED:
-                log.warn("Check-in rejected");
+                log.warn("Check-in rifiutato eventoId={} motivo=prenotazione_annullata", booking.getEvent().getId());
                 throw new AlreadyCanceledException("Booking already canceled");
 
             default:
@@ -220,6 +219,7 @@ public class BookingService {
 
     @Transactional
     public void anonymizeBookingsByEventId(Long eventId) {
+        bookingConfirmationQueueService.discardForEvent(eventId);
         List<Booking> bookings = bookingRepository.findAllByEventId(eventId);
         for (Booking booking : bookings) {
             booking.setNameCiphertext(null);
@@ -234,7 +234,7 @@ public class BookingService {
             booking.setUuid(UUID.randomUUID());
 
         }
-        log.info("Booking identifiers replaced after event closure");
+        log.info("Prenotazioni anonimizzate eventoId={} numero={}", eventId, bookings.size());
     }
 
     @SafeVarargs

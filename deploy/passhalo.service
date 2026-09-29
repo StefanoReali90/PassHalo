@@ -8,8 +8,8 @@ Type=simple
 User=passhalo
 Group=passhalo
 WorkingDirectory=/opt/passhalo
-EnvironmentFile=/etc/passhalo/passhalo.env
-ExecStart=/usr/bin/java -Xms256m -Xmx1536m -jar /opt/passhalo/current/backend.jar
+LoadCredential=passhalo.properties:/etc/passhalo/passhalo.properties
+ExecStart=/usr/bin/java -Dspring.config.additional-location=file:%d/passhalo.properties -Xms256m -Xmx1536m -jar /opt/passhalo/current/backend.jar
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30

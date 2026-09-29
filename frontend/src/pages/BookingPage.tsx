@@ -170,6 +170,7 @@ export function BookingPage() {
                     <p>{result.eventName}<br />{result.email}</p>
                     <img className="qr-image" src={qr} alt="QR code da mostrare all’ingresso" />
                     <p className="form-note">Mostra questo codice al personale all’ingresso.</p>
+                    <p className="form-note">Se non ricevi l’email con il QR code, scrivi a <a className="text-link" href="mailto:booking@passhalo.it">booking@passhalo.it</a>. Puoi comunque scaricare il QR qui.</p>
                     <a className="button primary full" href={qr} download={`PassHalo-${result.uuid}.png`}>
                         <Download size={17} /> Scarica il QR code
                     </a>
