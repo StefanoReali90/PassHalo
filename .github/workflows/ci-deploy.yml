@@ -124,9 +124,23 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
+          python3 -c "
+          import os
+          raw = os.environ.get('DEPLOY_SSH_KEY', '').strip()
+          header = '-----BEGIN OPENSSH PRIVATE KEY-----'
+          footer = '-----END OPENSSH PRIVATE KEY-----'
+          if header in raw and footer in raw:
+              body = raw.replace(header, '').replace(footer, '').replace(' ', '').replace('\r', '').replace('\n', '')
+              chunks = [body[i:i+70] for i in range(0, len(body), 70)]
+              content = header + '\n' + '\n'.join(chunks) + '\n' + footer + '\n'
+          else:
+              content = raw + '\n'
+          with open(os.path.expanduser('~/.ssh/id_ed25519'), 'w') as f:
+              f.write(content)
+          "
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -l -f "$HOME/.ssh/id_ed25519"
       - name: Upload and activate release
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
