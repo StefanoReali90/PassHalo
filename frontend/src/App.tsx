@@ -7,6 +7,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import './App.css';
 
+const MailSettingsPage = lazy(() => import('./pages/MailSettingsPage').then((module) => ({ default: module.MailSettingsPage })));
 const AccountPage = lazy(() => import('./pages/AccountPage').then((module) => ({ default: module.AccountPage })));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })));
 const BookingPage = lazy(() => import('./pages/BookingPage').then((module) => ({ default: module.BookingPage })));
@@ -31,6 +32,7 @@ const pageTitles: Array<[string, string]> = [
     ['/admin/bookings', 'Prenotazioni'],
     ['/staff/scan', 'Controllo ingressi'],
     ['/staff/access', 'Accesso staff'],
+    ['/settings/mail', 'Configurazione mail'],
     ['/account', 'Sicurezza account'],
     ['/prenota', 'Prenota il tuo ingresso'],
     ['/embed/booking', 'Modulo prenotazione'],
@@ -90,6 +92,8 @@ export default function App() {
 
                                     <Route path="/staff/scan" element={<ProtectedRoute roles={['ADMIN', 'STAFF']}><StaffScanPage /></ProtectedRoute>} />
                                     <Route path="/collaborations" element={<ProtectedRoute><CollaborationsPage /></ProtectedRoute>} />
+                                    <Route path="/settings" element={<Navigate to="/account" replace />} />
+                                    <Route path="/settings/mail" element={<ProtectedRoute roles={['ADMIN']}><MailSettingsPage /></ProtectedRoute>} />
                                     <Route path="/account" element={<ProtectedRoute roles={['ADMIN', 'STAFF']}><AccountPage /></ProtectedRoute>} />
                                     <Route path="/admin/dashboard" element={<ProtectedRoute eventAdmin><AdminDashboardPage /></ProtectedRoute>} />
                                     <Route path="/admin/events" element={<ProtectedRoute eventAdmin><EventsPage /></ProtectedRoute>} />
