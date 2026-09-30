@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, CalendarDays, ChevronDown, KeyRound, LayoutDashboard, LogOut, Menu, Moon, ScanLine, Sun, TicketCheck, UsersRound, X } from 'lucide-react';
+import { Bell, CalendarDays, ChevronDown, KeyRound, LayoutDashboard, LogOut, Mail, Menu, Moon, ScanLine, Sun, TicketCheck, UsersRound, X } from 'lucide-react';
 import { Brand } from './Brand';
 import { EVENT_ACCESS_CHANGED, getMyEvents } from '../api/events';
 import { getStaffRequests } from '../api/staffAccess';
@@ -142,7 +142,9 @@ export function Navbar() {
                             <div id="profile-panel" className="profile-panel">
                                 <strong>{user.name} {user.surname}</strong>
                                 <p>{user.email}</p>
+                                <span className="eyebrow">Impostazioni</span>
                                 <NavLink className="profile-link" to="/account" onClick={() => setOpen(false)}><KeyRound size={15} /> Sicurezza account</NavLink>
+                                {user.role === 'ADMIN' && <NavLink className="profile-link" to="/settings/mail" onClick={() => setOpen(false)}><Mail size={15} /> Configurazione mail</NavLink>}
                                 <hr />
                                 <span className="eyebrow">Aspetto</span>
                                 <div className="theme-options">
