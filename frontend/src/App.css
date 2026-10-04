@@ -3292,7 +3292,54 @@ label,
 .payment-choices { display: flex; flex-wrap: wrap; gap: 0.65rem; }
 .payment-choices .button { flex: 1; }
 .payment-hint { font-size: 0.85rem; margin-top: 0.65rem; }
-.payment-counts { margin-bottom: 1.5rem; }
-.payment-counts .data-table { margin-top: 1rem; }
-.payment-counts .data-table tbody th { text-transform: none; letter-spacing: normal; }
-.payment-counts caption { text-align: left; padding-bottom: 0.5rem; }
+.payment-counts {
+    container-type: inline-size;
+    margin-bottom: 1.5rem;
+    padding: clamp(18px, 2.5vw, 28px);
+}
+
+.payment-counts > p { margin-bottom: 20px; }
+.payment-counts .data-table { min-width: 0; margin: 0; }
+.payment-counts .data-table th,
+.payment-counts .data-table td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.payment-counts .data-table th:first-child { text-align: left; }
+.payment-counts .data-table tbody th,
+.payment-counts .data-table tfoot th { text-transform: none; letter-spacing: normal; }
+.payment-counts .data-table tfoot { font-weight: 650; }
+.payment-counts caption { text-align: left; padding-bottom: 12px; color: var(--muted); }
+.payment-counts > .payment-hint { margin: 16px 0 0; }
+
+.payment-counts-cards { display: none; }
+.payment-counts-card {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+.payment-counts-card h3 { margin: 0 0 14px; font-size: 14px; }
+.payment-counts-card dl { margin: 0; }
+.payment-counts-card dl > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+    margin-top: 10px;
+}
+.payment-counts-card dt { color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.payment-counts-card dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.payment-counts-total { background: var(--raised); }
+.payment-counts-subtotal { padding-top: 10px; border-top: 1px solid var(--line); }
+
+@container (max-width: 640px) {
+    .payment-counts-table { display: none; }
+    .payment-counts-cards { display: grid; gap: 12px; }
+}
