@@ -56,8 +56,12 @@ if ! systemctl restart passhalo; then
 fi
 
 healthy=false
-for _ in {1..40}; do
-  if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:8080/events > /dev/null 2>&1; then
+for _ in {1..60}; do
+  if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/v3/api-docs > /dev/null 2>&1; then
+    healthy=true
+    break
+  fi
+  if curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/events > /dev/null 2>&1; then
     healthy=true
     break
   fi
@@ -65,6 +69,7 @@ for _ in {1..40}; do
 done
 
 if [[ "$healthy" != true ]]; then
+  journalctl -u passhalo -n 120 --no-pager >&2 || true
   rollback
   echo 'New release failed its backend health check.' >&2
   exit 1
