@@ -3,12 +3,14 @@ package org.spring.passhalo.user.service;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.booking.dto.CheckInResponse;
+import org.spring.passhalo.booking.enums.PaymentMethod;
 import org.spring.passhalo.booking.service.BookingService;
 import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.enums.EventState;
 import org.spring.passhalo.event.exception.AccessDeniedException;
 import org.spring.passhalo.event.exception.EventNotFoundException;
 import org.spring.passhalo.event.repository.EventRepository;
+import org.spring.passhalo.event.service.WalkInCounterService;
 import org.spring.passhalo.user.dto.StaffAccessRequestResponse;
 import org.spring.passhalo.user.dto.StaffAccessStatusResponse;
 import org.spring.passhalo.user.dto.StaffCodeResponse;
@@ -53,6 +55,7 @@ public class StaffAccessService {
     private final StaffAccessCodeRepository codeRepository;
     private final StaffAccessRequestRepository requestRepository;
     private final BookingService bookingService;
+    private final WalkInCounterService walkInCounterService;
     private final EntityManager entityManager;
     private final ConcurrentHashMap<String, AttemptWindow> attempts = new ConcurrentHashMap<>();
 
@@ -153,23 +156,21 @@ public class StaffAccessService {
     }
 
     @Transactional
-    public CheckInResponse checkIn(String secret, UUID uuid) {
+    public CheckInResponse checkIn(String secret, UUID uuid, PaymentMethod paymentMethod) {
         Event event = approvedEvent(secret);
-        return bookingService.checkInBookingForEvent(uuid, event.getId());
+        return bookingService.checkInBookingForEvent(uuid, event.getId(), paymentMethod);
     }
 
     @Transactional
-    public void addWalkIn(String secret) {
+    public void addWalkIn(String secret, PaymentMethod paymentMethod) {
         Event event = approvedEvent(secret);
-        event.setWalkInCount(event.getWalkInCount() + 1);
+        walkInCounterService.adjust(event, paymentMethod, true);
     }
 
     @Transactional
-    public void removeWalkIn(String secret) {
+    public void removeWalkIn(String secret, PaymentMethod paymentMethod) {
         Event event = approvedEvent(secret);
-        if (event.getWalkInCount() > 0) {
-            event.setWalkInCount(event.getWalkInCount() - 1);
-        }
+        walkInCounterService.adjust(event, paymentMethod, false);
     }
 
     @Transactional

@@ -11,6 +11,12 @@ public record EventDashboardResponse(
     double estimatedBookingRevenue,
     int walkInCount,
     long totalAttendees,
-    double totalRevenue
+    double totalRevenue,
+    long checkedInCashCount,
+    long checkedInCardCount,
+    long checkedInUnrecordedCount,
+    int walkInCashCount,
+    int walkInCardCount,
+    int walkInUnrecordedCount
 ) {
 }

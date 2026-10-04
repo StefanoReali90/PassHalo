@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.booking.dto.CheckInResponse;
+import org.spring.passhalo.booking.dto.PaymentMethodRequest;
 import org.spring.passhalo.user.dto.StaffAccessRequestResponse;
 import org.spring.passhalo.user.dto.StaffAccessStatusResponse;
 import org.spring.passhalo.user.dto.StaffCheckInRequest;
@@ -92,20 +93,20 @@ public class StaffAccessController {
                                                     HttpServletRequest httpRequest) {
         requireTrustedOrigin(httpRequest);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(staffAccessService.checkIn(cookieValue(httpRequest), request.uuid()));
+                .body(staffAccessService.checkIn(cookieValue(httpRequest), request.uuid(), request.paymentMethod()));
     }
 
     @PostMapping("/staff-access/walk-ins")
-    public ResponseEntity<Void> addWalkIn(HttpServletRequest request) {
+    public ResponseEntity<Void> addWalkIn(HttpServletRequest request, @Valid @RequestBody PaymentMethodRequest payment) {
         requireTrustedOrigin(request);
-        staffAccessService.addWalkIn(cookieValue(request));
+        staffAccessService.addWalkIn(cookieValue(request), payment.paymentMethod());
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/staff-access/walk-ins/decrement")
-    public ResponseEntity<Void> removeWalkIn(HttpServletRequest request) {
+    public ResponseEntity<Void> removeWalkIn(HttpServletRequest request, @Valid @RequestBody PaymentMethodRequest payment) {
         requireTrustedOrigin(request);
-        staffAccessService.removeWalkIn(cookieValue(request));
+        staffAccessService.removeWalkIn(cookieValue(request), payment.paymentMethod());
         return ResponseEntity.noContent().build();
     }
 

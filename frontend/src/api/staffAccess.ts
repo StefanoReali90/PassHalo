@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { CheckInResponse } from '../types';
+import type { CheckInResponse, PaymentMethod } from '../types';
 
 const staffActionHeaders = { 'X-Staff-Action': '1' };
 
@@ -47,20 +47,20 @@ export function getStaffAccessStatus(): Promise<StaffAccessStatus> {
     return apiFetch<StaffAccessStatus>('/staff-access/status');
 }
 
-export function staffCheckIn(uuid: string): Promise<CheckInResponse> {
+export function staffCheckIn(uuid: string, paymentMethod: PaymentMethod): Promise<CheckInResponse> {
     return apiFetch<CheckInResponse>('/staff-access/check-in', {
         method: 'POST',
         headers: staffActionHeaders,
-        body: JSON.stringify({ uuid }),
+        body: JSON.stringify({ uuid, paymentMethod }),
     });
 }
 
-export function staffAddWalkIn(): Promise<void> {
-    return apiFetch<void>('/staff-access/walk-ins', { method: 'POST', headers: staffActionHeaders });
+export function staffAddWalkIn(paymentMethod: PaymentMethod): Promise<void> {
+    return apiFetch<void>('/staff-access/walk-ins', { method: 'POST', headers: staffActionHeaders, body: JSON.stringify({ paymentMethod }) });
 }
 
-export function staffRemoveWalkIn(): Promise<void> {
-    return apiFetch<void>('/staff-access/walk-ins/decrement', { method: 'POST', headers: staffActionHeaders });
+export function staffRemoveWalkIn(paymentMethod: PaymentMethod): Promise<void> {
+    return apiFetch<void>('/staff-access/walk-ins/decrement', { method: 'POST', headers: staffActionHeaders, body: JSON.stringify({ paymentMethod }) });
 }
 
 export function staffLogout(): Promise<void> {

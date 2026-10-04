@@ -7,6 +7,7 @@ import org.spring.passhalo.booking.dto.BookingResponse;
 import org.spring.passhalo.booking.dto.CheckInResponse;
 import org.spring.passhalo.booking.entity.Booking;
 import org.spring.passhalo.booking.enums.BookingStatus;
+import org.spring.passhalo.booking.enums.PaymentMethod;
 import org.spring.passhalo.booking.exception.*;
 import org.spring.passhalo.booking.mapper.BookingMapper;
 import org.spring.passhalo.booking.repository.BookingRepository;
@@ -23,6 +24,7 @@ import org.spring.passhalo.user.entity.User;
 import org.spring.passhalo.user.service.AuthEventService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -164,11 +166,11 @@ public class BookingService {
     }
 
     @Transactional
-    public CheckInResponse checkInBooking(UUID uuid , User admin) {
+    public CheckInResponse checkInBooking(UUID uuid, User admin, PaymentMethod paymentMethod) {
 
         Booking booking = bookingRepository.findForCheckInByUuid(uuid).orElseThrow(() -> new BookingNotFoundException("Booking not found"));
         authEventService.checkStaffAccess(booking.getEvent().getId(), admin.getId());
-        return validateCheckIn(booking);
+        return validateCheckIn(booking, paymentMethod);
     }
 
     @Transactional
@@ -198,33 +200,37 @@ public class BookingService {
     }
 
     @Transactional
-    public CheckInResponse checkInBookingForEvent(UUID uuid, Long eventId, User user) {
+    public CheckInResponse checkInBookingForEvent(UUID uuid, Long eventId, User user, PaymentMethod paymentMethod) {
         Booking booking = bookingRepository.findForCheckInByUuid(uuid)
                 .orElseThrow(() -> new BookingNotFoundException("Booking not found"));
         if (!booking.getEvent().getId().equals(eventId)) {
             throw new BookingNotFoundException("Booking not found for this event");
         }
         authEventService.checkStaffAccess(eventId, user.getId());
-        return validateCheckIn(booking);
+        return validateCheckIn(booking, paymentMethod);
     }
 
     @Transactional
-    public CheckInResponse checkInBookingForEvent(UUID uuid, Long eventId) {
+    public CheckInResponse checkInBookingForEvent(UUID uuid, Long eventId, PaymentMethod paymentMethod) {
         Booking booking = bookingRepository.findForCheckInByUuid(uuid)
                 .orElseThrow(() -> new BookingNotFoundException("Booking not found"));
         if (!booking.getEvent().getId().equals(eventId)) {
             throw new BookingNotFoundException("Booking not found");
         }
-        return validateCheckIn(booking);
+        return validateCheckIn(booking, paymentMethod);
     }
 
-    private CheckInResponse validateCheckIn(Booking booking) {
+    private CheckInResponse validateCheckIn(Booking booking, PaymentMethod paymentMethod) {
+        if (paymentMethod == null) {
+            throw new PaymentRegistrationException("Seleziona Contanti oppure Carta / POS", HttpStatus.BAD_REQUEST);
+        }
         if (booking.getEvent() != null && booking.getEvent().getEventState() == EventState.FINISHED) {
             throw new EventFinishedException("Event is finished and check-in is not allowed");
         }
 
         switch (booking.getBookingStatus()) {
             case CREATED:
+                booking.setPaymentMethod(paymentMethod);
                 booking.setBookingStatus((BookingStatus.VALIDATED));
                 booking.setCheckInDateTime(LocalDateTime.now());
                 log.info("Check-in convalidato eventoId={}", booking.getEvent().getId());

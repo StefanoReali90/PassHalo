@@ -1,4 +1,5 @@
 export type UserRole = 'ADMIN' | 'STAFF';
+export type PaymentMethod = 'CASH' | 'CARD';
 
 export interface User {
     name: string;
@@ -119,6 +120,12 @@ export interface EventDashboardResponse {
     walkInCount: number;
     totalAttendees: number;
     totalRevenue: number;
+    checkedInCashCount: number;
+    checkedInCardCount: number;
+    checkedInUnrecordedCount: number;
+    walkInCashCount: number;
+    walkInCardCount: number;
+    walkInUnrecordedCount: number;
 }
 
 export interface BookingRequest {

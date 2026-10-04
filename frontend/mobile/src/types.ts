@@ -83,6 +83,8 @@ export interface CheckInResponse {
   eventName: string;
 }
 
+export type PaymentMethod = 'CASH' | 'CARD';
+
 export interface EventDashboardResponse {
   eventId: number;
   eventName: string;
@@ -95,4 +97,10 @@ export interface EventDashboardResponse {
   walkInCount: number;
   totalAttendees: number;
   totalRevenue: number;
+  checkedInCashCount: number;
+  checkedInCardCount: number;
+  checkedInUnrecordedCount: number;
+  walkInCashCount: number;
+  walkInCardCount: number;
+  walkInUnrecordedCount: number;
 }

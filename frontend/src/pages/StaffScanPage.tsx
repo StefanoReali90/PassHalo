@@ -3,7 +3,9 @@ import { CheckCircle2, Keyboard, Minus, Plus, QrCode, Wifi, WifiOff, XCircle } f
 import { checkInBooking } from '../api/booking';
 import { decrementWalkInCount, getMyEvents, incrementWalkInCount } from '../api/events';
 import { QrCameraScanner } from '../components/QrCameraScanner';
-import type { MyEvent } from '../types';
+import { PaymentMethodSelector } from '../components/PaymentMethodSelector';
+import { paymentMethodLabel } from '../utils/paymentMethod';
+import type { MyEvent, PaymentMethod } from '../types';
 import { isEventBookable } from '../utils/eventAvailability';
 
 interface ScanHistoryItem {
@@ -37,7 +39,10 @@ export function StaffScanPage() {
     const [eventsError, setEventsError] = useState('');
     const [walkInBusy, setWalkInBusy] = useState(false);
     const [walkInMessage, setWalkInMessage] = useState('');
-    const [sessionWalkIns, setSessionWalkIns] = useState<Record<number, number>>({});
+    const [sessionWalkIns, setSessionWalkIns] = useState<Record<string, number>>({});
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+    const [walkInMethod, setWalkInMethod] = useState<PaymentMethod | null>(null);
+    const sessionKey = `${selectedEventId}:${walkInMethod}`;
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -83,14 +88,15 @@ export function StaffScanPage() {
 
     const validatePass = useCallback(async (rawValue: string) => {
         const uuid = extractUuid(rawValue);
-        if (!uuid || busy || !online || selectedEventId === null) return;
+        if (!uuid || busy || walkInBusy || !online || selectedEventId === null || paymentMethod === null) return;
 
         setBusy(true);
         setSuccess(null);
         setError(null);
         try {
-            const result = await checkInBooking(uuid, selectedEventId);
-            const description = `Pass convalidato · ${result.eventName}`;
+            const result = await checkInBooking(uuid, selectedEventId, paymentMethod);
+            const description = `Pass convalidato · ${result.eventName} · ${paymentMethodLabel(paymentMethod)}`;
+            setPaymentMethod(null);
             setSuccess(description);
             setToken('');
             addHistory('success', description);
@@ -104,18 +110,20 @@ export function StaffScanPage() {
             setBusy(false);
             window.setTimeout(() => focusScannerInput(inputRef.current), 0);
         }
-    }, [addHistory, busy, online, selectedEventId]);
+    }, [addHistory, busy, walkInBusy, online, selectedEventId, paymentMethod]);
 
     const adjustWalkIns = async (direction: 'increment' | 'decrement') => {
-        if (selectedEventId === null || walkInBusy || !online) return;
+        if (selectedEventId === null || walkInBusy || busy || !online || walkInMethod === null) return;
+        if (direction === 'decrement' && (sessionWalkIns[sessionKey] ?? 0) <= 0) return;
         setWalkInBusy(true);
         setEventsError('');
         setWalkInMessage('');
         try {
-            if (direction === 'increment') await incrementWalkInCount(selectedEventId);
-            else await decrementWalkInCount(selectedEventId);
-            setSessionWalkIns((current) => ({ ...current, [selectedEventId]: (current[selectedEventId] ?? 0) + (direction === 'increment' ? 1 : -1) }));
-            setWalkInMessage(direction === 'increment' ? 'Ingresso senza prenotazione registrato.' : 'Ultimo ingresso senza prenotazione rimosso.');
+            if (direction === 'increment') await incrementWalkInCount(selectedEventId, walkInMethod);
+            else await decrementWalkInCount(selectedEventId, walkInMethod);
+            setSessionWalkIns((current) => ({ ...current, [sessionKey]: (current[sessionKey] ?? 0) + (direction === 'increment' ? 1 : -1) }));
+            setWalkInMessage(`${direction === 'increment' ? 'Ingresso registrato' : 'Ingresso rimosso'} · ${paymentMethodLabel(walkInMethod)}.`);
+            setWalkInMethod(null);
         } catch (requestError) {
             setEventsError(requestError instanceof Error ? requestError.message : 'Conteggio ingressi non aggiornato.');
         } finally { setWalkInBusy(false); }
@@ -146,10 +154,12 @@ export function StaffScanPage() {
             {selectedEventId !== null && (
                 <div className="panel">
                     <label htmlFor="scan-event">Evento da controllare</label>
-                    <select id="scan-event" value={selectedEventId} disabled={busy || eventsLoading} onChange={(event) => {
+                    <select id="scan-event" value={selectedEventId} disabled={busy || walkInBusy || eventsLoading} onChange={(event) => {
                         const eventId = Number(event.target.value);
                         setSelectedEventId(eventId);
                         setWalkInMessage('');
+                        setPaymentMethod(null);
+                        setWalkInMethod(null);
                         const url = new URL(window.location.href);
                         url.searchParams.set('eventId', String(eventId));
                         window.history.replaceState(null, '', url);
@@ -174,7 +184,8 @@ export function StaffScanPage() {
                         </div>
                     )}
 
-                    <QrCameraScanner disabled={busy || !online || eventsLoading || events.length === 0} onDetected={validatePass} />
+                    <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} disabled={busy || walkInBusy || !online} label="Pagamento del pass da convalidare" />
+                    <QrCameraScanner disabled={busy || walkInBusy || !online || eventsLoading || events.length === 0 || paymentMethod === null} onDetected={validatePass} />
 
                     <div className="scan-divider"><span>oppure</span></div>
                     <form onSubmit={check}>
@@ -189,7 +200,7 @@ export function StaffScanPage() {
                                 autoComplete="off"
                                 required
                             />
-                            <button className="button primary" disabled={busy || !online || eventsLoading || events.length === 0 || !token.trim()}>{busy ? 'Verifica…' : 'Convalida'}</button>
+                            <button className="button primary" disabled={busy || walkInBusy || !online || eventsLoading || events.length === 0 || !token.trim() || paymentMethod === null}>{busy ? 'Verifica…' : 'Convalida'}</button>
                         </div>
                     </form>
                 </article>
@@ -212,10 +223,11 @@ export function StaffScanPage() {
                         <span className="eyebrow">Ingressi senza prenotazione</span>
                         <h2>Registra gli accessi in cassa</h2>
                         <p>Evento: <strong>{events.find((event) => event.id === selectedEventId)?.name ?? 'Nessuno'}</strong></p>
-                        <p>Registrati da questo dispositivo durante la sessione: <strong>{selectedEventId === null ? 0 : sessionWalkIns[selectedEventId] ?? 0}</strong></p>
+                        <p>Registrati da questo dispositivo: <strong>{sessionWalkIns[`${selectedEventId}:CASH`] ?? 0} contanti · {sessionWalkIns[`${selectedEventId}:CARD`] ?? 0} carta</strong></p>
+                        <PaymentMethodSelector value={walkInMethod} onChange={setWalkInMethod} disabled={busy || walkInBusy || !online} label="Pagamento dell’ingresso senza prenotazione" />
                         <div className="counter-actions">
-                            <button className="button" disabled={walkInBusy || !online || selectedEventId === null || (sessionWalkIns[selectedEventId] ?? 0) <= 0} onClick={() => void adjustWalkIns('decrement')}><Minus size={16} /> Correggi</button>
-                            <button className="button primary" disabled={walkInBusy || !online || selectedEventId === null} onClick={() => void adjustWalkIns('increment')}><Plus size={16} /> Aggiungi ingresso</button>
+                            <button className="button" disabled={busy || walkInBusy || !online || selectedEventId === null || walkInMethod === null || (sessionWalkIns[sessionKey] ?? 0) <= 0} onClick={() => void adjustWalkIns('decrement')}><Minus size={16} /> Correggi metodo selezionato</button>
+                            <button className="button primary" disabled={busy || walkInBusy || !online || selectedEventId === null || walkInMethod === null} onClick={() => void adjustWalkIns('increment')}><Plus size={16} /> Aggiungi ingresso</button>
                         </div>
                         {walkInMessage && <p className="notice success" role="status">{walkInMessage}</p>}
                     </div>

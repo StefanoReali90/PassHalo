@@ -3281,3 +3281,18 @@ label,
     border-color: var(--accent);
     color: var(--accent);
 }
+
+.payment-selector {
+    border: 0;
+    padding: 0;
+    margin: 1rem 0;
+    min-width: 0;
+}
+.payment-selector legend { font-weight: 600; margin-bottom: 0.65rem; }
+.payment-choices { display: flex; flex-wrap: wrap; gap: 0.65rem; }
+.payment-choices .button { flex: 1; }
+.payment-hint { font-size: 0.85rem; margin-top: 0.65rem; }
+.payment-counts { margin-bottom: 1.5rem; }
+.payment-counts .data-table { margin-top: 1rem; }
+.payment-counts .data-table tbody th { text-transform: none; letter-spacing: normal; }
+.payment-counts caption { text-align: left; padding-bottom: 0.5rem; }

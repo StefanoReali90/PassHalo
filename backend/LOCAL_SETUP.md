@@ -31,3 +31,9 @@ una differenza nella lunghezza delle colonne.
 
 Per un'installazione pubblica, configura le chiavi tramite un gestore di segreti;
 questo script e' destinato soltanto alla macchina di sviluppo.
+
+Per i database creati prima del conteggio Contanti/Carta, esegui prima del riavvio
+`db/migrations/20261004_payment_method_counts.sql`. Aggiunge il metodo alle
+prenotazioni e i due contatori agli eventi. Gli ingressi storici rimangono
+"Metodo non registrato". Aggiorna insieme backend, web e app mobile: i nuovi
+endpoint di ingresso richiedono il campo JSON `paymentMethod` (`CASH` o `CARD`).

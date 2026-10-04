@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { BookingRequest, BookingResponse, CheckInResponse } from '../types';
+import type { BookingRequest, BookingResponse, CheckInResponse, PaymentMethod } from '../types';
 
 const segment = (value: string) => encodeURIComponent(value.trim());
 
@@ -38,8 +38,8 @@ export function getBookings(): Promise<BookingResponse[]> {
     return apiFetch<BookingResponse[]>('/bookings/');
 }
 
-export function checkInBooking(uuid: string, eventId: number): Promise<CheckInResponse> {
-    return apiFetch<CheckInResponse>(`/bookings/events/${eventId}/check-in/${segment(uuid)}`, { method: 'PATCH' });
+export function checkInBooking(uuid: string, eventId: number, paymentMethod: PaymentMethod): Promise<CheckInResponse> {
+    return apiFetch<CheckInResponse>(`/bookings/events/${eventId}/check-in/${segment(uuid)}`, { method: 'PATCH', body: JSON.stringify({ paymentMethod }) });
 }
 
 export function cancelBooking(uuid: string): Promise<void> {

@@ -80,7 +80,7 @@ public class BookingServiceTest {
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(bookingId)).thenReturn(Optional.of(booking));
         when(bookingMapper.toCheckInResponse(booking)).thenReturn(expectedResponse);
-        CheckInResponse response = bookingService.checkInBooking(bookingId,user);
+        CheckInResponse response = bookingService.checkInBooking(bookingId, user, org.spring.passhalo.booking.enums.PaymentMethod.CASH);
         assertEquals(expectedResponse, response);
         assertNotNull(response);
         assertEquals("Concerto", response.eventName());
@@ -107,7 +107,7 @@ public class BookingServiceTest {
         doThrow(new AccessDeniedException("Access denied"))
                 .when(authEventService).checkStaffAccess(event.getId(), user.getId());
 
-        assertThrows(AccessDeniedException.class, () -> bookingService.checkInBooking(bookingId, user));
+        assertThrows(AccessDeniedException.class, () -> bookingService.checkInBooking(bookingId, user, org.spring.passhalo.booking.enums.PaymentMethod.CASH));
 
         assertEquals(BookingStatus.CREATED, booking.getBookingStatus());
         assertNull(booking.getCheckInDateTime());
@@ -127,7 +127,7 @@ public class BookingServiceTest {
         booking.setBookingStatus(BookingStatus.VALIDATED);
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(bookingId)).thenReturn(Optional.of(booking));
-        assertThrows(AlreadyValidatedException.class, () -> bookingService.checkInBooking(bookingId, user));
+        assertThrows(AlreadyValidatedException.class, () -> bookingService.checkInBooking(bookingId, user, org.spring.passhalo.booking.enums.PaymentMethod.CASH));
         verify(bookingRepository, times(1)).findForCheckInByUuid(bookingId);
         verify(authEventService).checkStaffAccess(event.getId(), user.getId());
     }
@@ -138,7 +138,7 @@ public class BookingServiceTest {
         User user = new User();
         user.setId(7L);
         when(bookingRepository.findForCheckInByUuid(uuid)).thenReturn(Optional.empty());
-        assertThrows(BookingNotFoundException.class, () -> bookingService.checkInBooking(uuid, user));
+        assertThrows(BookingNotFoundException.class, () -> bookingService.checkInBooking(uuid, user, org.spring.passhalo.booking.enums.PaymentMethod.CASH));
         verify(bookingRepository, times(1)).findForCheckInByUuid(uuid);
         verifyNoInteractions(authEventService);
     }
@@ -156,7 +156,7 @@ public class BookingServiceTest {
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(uuid)).thenReturn(Optional.of(booking));
-        assertThrows(AlreadyCanceledException.class, () -> bookingService.checkInBooking(uuid, user));
+        assertThrows(AlreadyCanceledException.class, () -> bookingService.checkInBooking(uuid, user, org.spring.passhalo.booking.enums.PaymentMethod.CASH));
         verify(bookingRepository, times(1)).findForCheckInByUuid(uuid);
         verify(authEventService).checkStaffAccess(event.getId(), user.getId());
     }
@@ -355,7 +355,7 @@ public class BookingServiceTest {
         booking.setCheckInDateTime(null);
         booking.setEvent(event);
         when(bookingRepository.findForCheckInByUuid(bookingId)).thenReturn(Optional.of(booking));
-        assertThrows(EventFinishedException.class, () -> bookingService.checkInBooking(bookingId,user));
+        assertThrows(EventFinishedException.class, () -> bookingService.checkInBooking(bookingId, user, org.spring.passhalo.booking.enums.PaymentMethod.CASH));
         verify(bookingRepository, times(1)).findForCheckInByUuid(bookingId);
         verify(authEventService).checkStaffAccess(event.getId(), user.getId());
     }

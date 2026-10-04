@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { Event, EventDashboardResponse, EventRequest, MyEvent } from '../types';
+import type { Event, EventDashboardResponse, EventRequest, MyEvent, PaymentMethod } from '../types';
 
 export const EVENT_ACCESS_CHANGED = 'passhalo:event-access-changed';
 
@@ -41,12 +41,12 @@ export function deleteEvent(eventId: number): Promise<void> {
     return apiFetch<void>(`/events/${eventId}`, { method: 'DELETE' });
 }
 
-export function incrementWalkInCount(eventId: number): Promise<void> {
-    return apiFetch<void>(`/events/${eventId}/walk-in`, { method: 'PATCH' });
+export function incrementWalkInCount(eventId: number, paymentMethod: PaymentMethod): Promise<void> {
+    return apiFetch<void>(`/events/${eventId}/walk-in`, { method: 'PATCH', body: JSON.stringify({ paymentMethod }) });
 }
 
-export function decrementWalkInCount(eventId: number): Promise<void> {
-    return apiFetch<void>(`/events/${eventId}/walk-in/decrement`, { method: 'PATCH' });
+export function decrementWalkInCount(eventId: number, paymentMethod: PaymentMethod): Promise<void> {
+    return apiFetch<void>(`/events/${eventId}/walk-in/decrement`, { method: 'PATCH', body: JSON.stringify({ paymentMethod }) });
 }
 
 export function closeEvent(eventId: number): Promise<void> {

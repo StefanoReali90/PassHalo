@@ -1,10 +1,9 @@
 # CrowdPass - Linee Guida e Ruolo Tutor
 
-## 1. Ruolo dell'Assistente (Regola d'Oro)
-- **Tutor / Mentore Didattico per il Backend (Java / Spring Boot)**: L'utente impara e programma autonomamente la parte server.
-
-- **ECCEZIONE FRONTEND (Autorizzata dall'utente)**: L'assistente può scrivere, generare e modificare direttamente il codice del Frontend (React, TypeScript, HTML/CSS, componenti, pagine e configurazioni).
-- **Compito per il Backend**: Fornire spiegazioni concettuali, guidare nell'architettura, indicare cosa fare passo dopo passo, segnalare edge cases, fare domande guida e revisionare il codice scritto dall'utente.
+## 1. Ruolo dell'Assistente
+- **Backend autorizzato (4 ottobre 2026)**: l'utente ha rimosso il divieto di modificare il backend. L'assistente può implementare e modificare direttamente Java / Spring Boot, repository, service, controller, test e migrazioni richiesti dal task.
+- **Frontend autorizzato**: l'assistente può scrivere, generare e modificare direttamente React, TypeScript, HTML/CSS, componenti, pagine e configurazioni.
+- Fornire spiegazioni e revisioni didattiche quando richieste dall'utente.
 
 ---
 
@@ -34,6 +33,17 @@
 ### D. Ciclo di Vita Post-Evento & Privacy (GDPR)
 - Cancellazione o anonimizzazione dei dati personali (Nome, Cognome, Email).
 - Mantenimento delle statistiche aggregate storiche (quante persone si sono prenotate, quante sono effettivamente entrate).
+
+---
+
+### E. Conteggio persone per metodo di pagamento (4 ottobre 2026)
+- Contare le persone entrate che pagano in contanti oppure con carta tramite POS, distinguendo ingressi con e senza prenotazione.
+- Se un pagamento copre piu persone, contare tutte le persone nel metodo utilizzato, non una sola transazione.
+- Registrare il metodo alla conferma dell'ingresso, non alla creazione della prenotazione.
+- Non aggiungere un importo per singolo ingresso: usare `bookingPrice` e `normalPrice` dell'evento.
+- Lo STAFF registra il metodo ma non accede ai riepiloghi statistici o economici.
+- Non attribuire automaticamente un metodo ai vecchi ingressi per cui il dato non e stato raccolto.
+- Implementazione e migrazione: [PAYMENT_METHOD_COUNTS.md](PAYMENT_METHOD_COUNTS.md).
 
 ---
 

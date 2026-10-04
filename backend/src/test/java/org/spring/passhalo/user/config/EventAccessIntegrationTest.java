@@ -126,7 +126,7 @@ class EventAccessIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(delete("/events/{id}", event.getId()).with(user(otherAdmin)))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(patch("/events/{id}/walk-in", event.getId()).with(user(otherAdmin)))
+        mockMvc.perform(patch("/events/{id}/walk-in", event.getId()).with(user(otherAdmin)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(patch("/events/{id}/close", event.getId()).with(user(otherAdmin)))
                 .andExpect(status().isForbidden());
@@ -177,7 +177,7 @@ class EventAccessIntegrationTest {
                 .andExpect(jsonPath("$[0].role").value("STAFF"));
         mockMvc.perform(get("/events/{eventId}/memberships", event.getId()).with(user(staff)))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(patch("/events/{id}/walk-in", event.getId()).with(user(staff)))
+        mockMvc.perform(patch("/events/{id}/walk-in", event.getId()).with(user(staff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isNoContent());
         mockMvc.perform(patch("/events/{eventId}/memberships/{membershipId}/revoke", event.getId(), membership.getId())
                         .with(user(otherAdmin)))
@@ -185,7 +185,7 @@ class EventAccessIntegrationTest {
         mockMvc.perform(patch("/events/{eventId}/memberships/{membershipId}/revoke", event.getId(), membership.getId())
                         .with(user(owner)))
                 .andExpect(status().isNoContent());
-        mockMvc.perform(patch("/events/{id}/walk-in", event.getId()).with(user(staff)))
+        mockMvc.perform(patch("/events/{id}/walk-in", event.getId()).with(user(staff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/events/my-events").with(user(staff)))
                 .andExpect(status().isOk())
@@ -211,13 +211,13 @@ class EventAccessIntegrationTest {
         saveMembership(closed, staff, EventRole.STAFF, MembershipState.ACTIVE,
                 LocalDateTime.now().minusDays(3), null);
 
-        mockMvc.perform(patch("/events/{id}/walk-in", ongoing.getId()).with(user(staff)))
+        mockMvc.perform(patch("/events/{id}/walk-in", ongoing.getId()).with(user(staff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isNoContent());
-        mockMvc.perform(patch("/events/{id}/walk-in", elapsed.getId()).with(user(staff)))
+        mockMvc.perform(patch("/events/{id}/walk-in", elapsed.getId()).with(user(staff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(patch("/events/{id}/walk-in", closed.getId()).with(user(staff)))
+        mockMvc.perform(patch("/events/{id}/walk-in", closed.getId()).with(user(staff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(patch("/events/{id}/walk-in", elapsed.getId()).with(user(owner)))
+        mockMvc.perform(patch("/events/{id}/walk-in", elapsed.getId()).with(user(owner)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/events/my-events").with(user(staff)))
                 .andExpect(status().isOk())
@@ -247,17 +247,17 @@ class EventAccessIntegrationTest {
         booking.setEmail("booking@example.test");
         booking = bookingRepository.save(booking);
 
-        mockMvc.perform(patch("/bookings/check-in/{uuid}", booking.getUuid()).with(user(secondEventStaff)))
+        mockMvc.perform(patch("/bookings/check-in/{uuid}", booking.getUuid()).with(user(secondEventStaff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         assertEquals(BookingStatus.CREATED, booking.getBookingStatus());
 
         mockMvc.perform(patch("/bookings/events/{eventId}/check-in/{uuid}", secondEvent.getId(), booking.getUuid())
-                        .with(user(firstOwner)))
+                        .with(user(firstOwner)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isNotFound());
         assertEquals(BookingStatus.CREATED, booking.getBookingStatus());
 
         mockMvc.perform(patch("/bookings/events/{eventId}/check-in/{uuid}", firstEvent.getId(), booking.getUuid())
-                        .with(user(firstOwner)))
+                        .with(user(firstOwner)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eventName").value(firstEvent.getName()))
                 .andExpect(jsonPath("$.name").doesNotExist())

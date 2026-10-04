@@ -53,7 +53,7 @@ class ConcurrentCheckInIntegrationTest {
 
         try {
             Future<CheckInResponse> first = executor.submit(() -> transaction.execute(status -> {
-                CheckInResponse response = bookingService.checkInBooking(fixture.uuid(), fixture.owner());
+                CheckInResponse response = bookingService.checkInBooking(fixture.uuid(), fixture.owner(), org.spring.passhalo.booking.enums.PaymentMethod.CASH);
                 firstValidated.countDown();
                 try {
                     if (!releaseFirstCommit.await(10, TimeUnit.SECONDS)) {
@@ -69,7 +69,7 @@ class ConcurrentCheckInIntegrationTest {
 
             Future<CheckInResponse> second = executor.submit(() -> {
                 secondStarted.countDown();
-                return bookingService.checkInBooking(fixture.uuid(), fixture.owner());
+                return bookingService.checkInBooking(fixture.uuid(), fixture.owner(), org.spring.passhalo.booking.enums.PaymentMethod.CARD);
             });
             assertTrue(secondStarted.await(10, TimeUnit.SECONDS));
             assertThrows(TimeoutException.class, () -> second.get(250, TimeUnit.MILLISECONDS));
@@ -84,6 +84,7 @@ class ConcurrentCheckInIntegrationTest {
                 Booking saved = bookingRepository.findByUuid(fixture.uuid()).orElseThrow();
                 assertEquals(BookingStatus.VALIDATED, saved.getBookingStatus());
                 assertNotNull(saved.getCheckInDateTime());
+                assertEquals(org.spring.passhalo.booking.enums.PaymentMethod.CASH, saved.getPaymentMethod());
                 return null;
             });
         } finally {
