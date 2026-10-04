@@ -79,9 +79,9 @@ class AnonymousStaffAccessIntegrationTest {
         mockMvc.perform(staffPost("/staff-access/check-in").cookie(cookie)
                         .contentType(MediaType.APPLICATION_JSON).content(checkInBody(ownBooking)))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(staffPost("/staff-access/walk-ins/decrement").cookie(cookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins/decrement").cookie(cookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/events/{id}/staff-requests", event.getId()).with(user(stranger)))
                 .andExpect(status().isForbidden());
@@ -97,7 +97,7 @@ class AnonymousStaffAccessIntegrationTest {
         requestRepository.flush();
         mockMvc.perform(get("/staff-access/status").cookie(cookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("APPROVED"));
-        mockMvc.perform(post("/staff-access/walk-ins").cookie(cookie))
+        mockMvc.perform(post("/staff-access/walk-ins").cookie(cookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(staffPost("/staff-access/check-in").cookie(cookie)
                         .contentType(MediaType.APPLICATION_JSON).content(checkInBody(otherBooking)))
@@ -111,10 +111,12 @@ class AnonymousStaffAccessIntegrationTest {
         mockMvc.perform(staffPost("/staff-access/check-in").cookie(cookie)
                         .contentType(MediaType.APPLICATION_JSON).content(checkInBody(ownBooking)))
                 .andExpect(status().isConflict());
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie)).andExpect(status().isNoContent());
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}")).andExpect(status().isNoContent());
         assertEquals(1, eventRepository.findById(event.getId()).orElseThrow().getWalkInCount());
+        assertEquals(1, eventRepository.findById(event.getId()).orElseThrow().getWalkInCashCount());
+        assertEquals(org.spring.passhalo.booking.enums.PaymentMethod.CARD, ownBooking.getPaymentMethod());
         assertEquals(0, eventRepository.findById(otherEvent.getId()).orElseThrow().getWalkInCount());
-        mockMvc.perform(staffPost("/staff-access/walk-ins/decrement").cookie(cookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins/decrement").cookie(cookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isNoContent());
         assertEquals(0, eventRepository.findById(event.getId()).orElseThrow().getWalkInCount());
         mockMvc.perform(get("/events/{id}/dashboard", event.getId()).cookie(cookie))
@@ -124,7 +126,7 @@ class AnonymousStaffAccessIntegrationTest {
         MvcResult logout = mockMvc.perform(staffPost("/staff-access/logout").cookie(cookie))
                 .andExpect(status().isNoContent()).andReturn();
         assertEquals(0, logout.getResponse().getCookie("staff_access").getMaxAge());
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -140,7 +142,7 @@ class AnonymousStaffAccessIntegrationTest {
                         .with(user(owner))).andExpect(status().isNoContent());
         mockMvc.perform(get("/staff-access/status").cookie(rejectedCookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("REJECTED"));
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(rejectedCookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(rejectedCookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
 
         Cookie approvedCookie = request(firstCode).getResponse().getCookie("staff_access");
@@ -149,7 +151,7 @@ class AnonymousStaffAccessIntegrationTest {
         mockMvc.perform(staffPatch("/events/{id}/staff-requests/{requestId}/approve", event.getId(), approvedId)
                         .with(user(owner))).andExpect(status().isNoContent());
         requestRepository.flush();
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(approvedCookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(approvedCookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isNoContent());
 
         String secondCode = generatedCode(event, owner);
@@ -157,7 +159,7 @@ class AnonymousStaffAccessIntegrationTest {
         requestRepository.flush();
         mockMvc.perform(get("/staff-access/status").cookie(approvedCookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("EXPIRED"));
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(approvedCookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(approvedCookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(staffPost("/staff-access/requests").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"" + firstCode + "\"}"))
@@ -174,7 +176,7 @@ class AnonymousStaffAccessIntegrationTest {
         requestRepository.flush();
         mockMvc.perform(get("/staff-access/status").cookie(lastCookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("EXPIRED"));
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(lastCookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(lastCookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         assertEquals(EventState.FINISHED, eventRepository.findById(event.getId()).orElseThrow().getEventState());
     }
@@ -192,7 +194,7 @@ class AnonymousStaffAccessIntegrationTest {
         eventRepository.save(event);
         mockMvc.perform(get("/staff-access/status").cookie(cookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("EXPIRED"));
-        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie))
+        mockMvc.perform(staffPost("/staff-access/walk-ins").cookie(cookie).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(staffPost("/events/{id}/staff-code", event.getId()).with(user(owner)))
                 .andExpect(status().isConflict());
@@ -235,7 +237,7 @@ class AnonymousStaffAccessIntegrationTest {
     }
 
     private String checkInBody(Booking booking) {
-        return "{\"uuid\":\"" + booking.getUuid() + "\"}";
+        return "{\"uuid\":\"" + booking.getUuid() + "\",\"paymentMethod\":\"CARD\"}";
     }
 
     private JsonNode json(MvcResult result) throws Exception {

@@ -4,6 +4,9 @@ import { Link } from 'react-router-dom';
 import { getStaffAccessStatus, requestStaffAccess, staffAddWalkIn, staffCheckIn, staffLogout, staffRemoveWalkIn, type StaffAccessStatus } from '../api/staffAccess';
 import { isApiError } from '../api/client';
 import { QrCameraScanner } from '../components/QrCameraScanner';
+import { PaymentMethodSelector } from '../components/PaymentMethodSelector';
+import { paymentMethodLabel } from '../utils/paymentMethod';
+import type { PaymentMethod } from '../types';
 
 const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 
@@ -20,7 +23,9 @@ export function StaffAccessPage() {
     const [pass, setPass] = useState('');
     const [error, setError] = useState('');
     const [result, setResult] = useState<CheckResult | null>(null);
-    const [walkInCount, setWalkInCount] = useState(0);
+    const [walkInCounts, setWalkInCounts] = useState<Record<PaymentMethod, number>>({ CASH: 0, CARD: 0 });
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+    const [walkInMethod, setWalkInMethod] = useState<PaymentMethod | null>(null);
     const [walkInMessage, setWalkInMessage] = useState('');
     const [online, setOnline] = useState(() => navigator.onLine);
     const checkingRef = useRef(false);
@@ -76,6 +81,9 @@ export function StaffAccessPage() {
             const next = await requestStaffAccess(code.trim());
             setCode('');
             setStatus(next);
+            setWalkInCounts({ CASH: 0, CARD: 0 });
+            setPaymentMethod(null);
+            setWalkInMethod(null);
         } catch (requestError) {
             setError(requestError instanceof Error ? requestError.message : 'Non è stato possibile inviare la richiesta.');
         } finally { setBusy(false); }
@@ -89,7 +97,9 @@ export function StaffAccessPage() {
             setStatus(null);
             setPass('');
             setResult(null);
-            setWalkInCount(0);
+            setWalkInCounts({ CASH: 0, CARD: 0 });
+            setPaymentMethod(null);
+            setWalkInMethod(null);
             setWalkInMessage('');
         } catch (requestError) {
             setError(requestError instanceof Error ? requestError.message : 'Uscita non riuscita.');
@@ -97,7 +107,7 @@ export function StaffAccessPage() {
     };
 
     const checkPass = useCallback(async (value: string) => {
-        if (busy || !online || status?.state !== 'APPROVED') return;
+        if (busy || !online || status?.state !== 'APPROVED' || paymentMethod === null) return;
         const uuid = value.match(uuidPattern)?.[0];
         if (!uuid) {
             setResult({ ok: false, message: 'Il QR non contiene un pass valido.' });
@@ -106,8 +116,9 @@ export function StaffAccessPage() {
         setBusy(true);
         setResult(null);
         try {
-            const response = await staffCheckIn(uuid);
-            setResult({ ok: true, message: `Pass convalidato · ${response.eventName}` });
+            const response = await staffCheckIn(uuid, paymentMethod);
+            setResult({ ok: true, message: `Pass convalidato · ${response.eventName} · ${paymentMethodLabel(paymentMethod)}` });
+            setPaymentMethod(null);
             setPass('');
             navigator.vibrate?.(100);
         } catch (requestError) {
@@ -117,20 +128,20 @@ export function StaffAccessPage() {
                 void refreshStatus();
             }
         } finally { setBusy(false); }
-    }, [busy, online, refreshStatus, status?.state]);
+    }, [busy, online, refreshStatus, status?.state, paymentMethod]);
 
     const adjustWalkIn = async (direction: 'add' | 'remove') => {
-        if (busy || !online || status?.state !== 'APPROVED') return;
-        if (direction === 'remove' && walkInCount <= 0) return;
+        if (busy || !online || status?.state !== 'APPROVED' || walkInMethod === null) return;
+        if (direction === 'remove' && walkInCounts[walkInMethod] <= 0) return;
         setBusy(true);
         setWalkInMessage('');
         setError('');
         try {
-            if (direction === 'add') await staffAddWalkIn();
-            else await staffRemoveWalkIn();
-            setWalkInCount((count) => count + (direction === 'add' ? 1 : -1));
-            setWalkInMessage(direction === 'add'
-                ? 'Ingresso senza prenotazione registrato.' : 'Ultimo ingresso senza prenotazione corretto.');
+            if (direction === 'add') await staffAddWalkIn(walkInMethod);
+            else await staffRemoveWalkIn(walkInMethod);
+            setWalkInCounts((counts) => ({ ...counts, [walkInMethod]: counts[walkInMethod] + (direction === 'add' ? 1 : -1) }));
+            setWalkInMessage(`${direction === 'add' ? 'Ingresso registrato' : 'Ingresso rimosso'} · ${paymentMethodLabel(walkInMethod)}.`);
+            setWalkInMethod(null);
         } catch (requestError) {
             setError(requestError instanceof Error ? requestError.message : 'Conteggio non aggiornato.');
             if (isApiError(requestError) && (requestError.status === 401 || requestError.status === 403)) {
@@ -149,13 +160,22 @@ export function StaffAccessPage() {
             <div className="scan-grid">
                 <article className="panel scan-panel">
                     {result && <div className={`scan-result ${result.ok ? 'success' : 'error'}`} role={result.ok ? 'status' : 'alert'}>{result.ok ? <CheckCircle2 size={34} /> : <XCircle size={34} />}<div><strong>{result.ok ? 'INGRESSO OK' : 'INGRESSO KO'}</strong><span>{result.message}</span></div></div>}
-                    <QrCameraScanner disabled={busy || !online} onDetected={checkPass} />
+                    <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} disabled={busy || !online} label="Pagamento del pass da convalidare" />
+                    <QrCameraScanner disabled={busy || !online || paymentMethod === null} onDetected={checkPass} />
                     <div className="scan-divider"><span>oppure</span></div>
-                    <form onSubmit={(event) => { event.preventDefault(); void checkPass(pass); }}><label htmlFor="staff-pass"><Keyboard size={15} /> Codice del pass</label><div className="scan-input-row"><input id="staff-pass" value={pass} onChange={(event) => setPass(event.target.value)} placeholder="UUID del biglietto" autoComplete="off" required /><button className="button primary" disabled={busy || !online || !pass.trim()}>{busy ? 'Verifica…' : 'Convalida'}</button></div></form>
+                    <form onSubmit={(event) => { event.preventDefault(); void checkPass(pass); }}><label htmlFor="staff-pass"><Keyboard size={15} /> Codice del pass</label><div className="scan-input-row"><input id="staff-pass" value={pass} onChange={(event) => setPass(event.target.value)} placeholder="UUID del biglietto" autoComplete="off" required /><button className="button primary" disabled={busy || !online || !pass.trim() || paymentMethod === null}>{busy ? 'Verifica…' : 'Convalida'}</button></div></form>
                 </article>
                 <aside className="panel scan-history">
                     <span className="eyebrow">Evento assegnato</span><h2>{status.eventName}</h2><p>La verifica mostra soltanto l’esito. Nessun dato personale del cliente è visibile allo staff.</p>
-                    <div className="walk-in-tools"><span className="eyebrow">Ingressi senza prenotazione</span><h2>Registra un accesso</h2><p>Registrati da questo dispositivo durante la sessione: <strong>{walkInCount}</strong></p><div className="counter-actions"><button className="button" disabled={busy || !online || walkInCount <= 0} onClick={() => void adjustWalkIn('remove')}><Minus size={16} /> Correggi</button><button className="button primary" disabled={busy || !online} onClick={() => void adjustWalkIn('add')}><Plus size={16} /> Aggiungi ingresso</button></div>{walkInMessage && <p className="notice success" role="status">{walkInMessage}</p>}</div>
+                    <div className="walk-in-tools">
+                        <span className="eyebrow">Ingressi senza prenotazione</span><h2>Registra un accesso</h2>
+                        <p>Registrati da questo dispositivo: <strong>{walkInCounts.CASH} contanti · {walkInCounts.CARD} carta</strong></p>
+                        <PaymentMethodSelector value={walkInMethod} onChange={setWalkInMethod} disabled={busy || !online} label="Pagamento dell’ingresso senza prenotazione" />
+                        <div className="counter-actions">
+                            <button className="button" disabled={busy || !online || walkInMethod === null || walkInCounts[walkInMethod] <= 0} onClick={() => void adjustWalkIn('remove')}><Minus size={16} /> Correggi metodo selezionato</button>
+                            <button className="button primary" disabled={busy || !online || walkInMethod === null} onClick={() => void adjustWalkIn('add')}><Plus size={16} /> Aggiungi ingresso</button>
+                        </div>{walkInMessage && <p className="notice success" role="status">{walkInMessage}</p>}
+                    </div>
                     <button className="button staff-leave" disabled={busy} onClick={() => void leave()}><LogOut size={16} /> Termina la sessione</button>
                 </aside>
             </div>

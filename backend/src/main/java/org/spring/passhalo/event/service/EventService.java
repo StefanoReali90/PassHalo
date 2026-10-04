@@ -3,6 +3,7 @@ package org.spring.passhalo.event.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.spring.passhalo.booking.enums.BookingStatus;
+import org.spring.passhalo.booking.enums.PaymentMethod;
 import org.spring.passhalo.booking.exception.EventFinishedException;
 import org.spring.passhalo.booking.repository.BookingRepository;
 import org.spring.passhalo.booking.service.BookingService;
@@ -33,6 +34,7 @@ import org.spring.passhalo.user.service.StaffAccessService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -53,6 +55,7 @@ public class EventService {
 
     private final EventMapper eventMapper;
     private final BookingService bookingService;
+    private final WalkInCounterService walkInCounterService;
     private final AuthEventService authEventService;
     private final EventMembershipRepository eventMembershipRepository;
     private final EventJoinService eventJoinService;
@@ -173,34 +176,32 @@ public class EventService {
         eventRepository.delete(event);
     }
     @Transactional
-    public void incrementWalkInCount(Long eventId, User admin) {
+    public void incrementWalkInCount(Long eventId, User admin, PaymentMethod paymentMethod) {
         Event event = eventRepository.findDistinctById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
         authEventService.checkStaffAccess(eventId, admin.getId());
         if(event.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Cannot register walk-in attendee for a finished event");
         }
-        event.setWalkInCount(event.getWalkInCount() + 1);
+        walkInCounterService.adjust(event, paymentMethod, true);
         log.info("Ingresso senza prenotazione registrato eventoId={} totale={}", eventId, event.getWalkInCount());
         eventRepository.save(event);
     }
 
     @Transactional
-    public void decrementWalkInCount(Long eventId, User admin) {
+    public void decrementWalkInCount(Long eventId, User admin, PaymentMethod paymentMethod) {
         Event event = eventRepository.findDistinctById(eventId)
                 .orElseThrow(() -> new EventNotFoundException("Event not found with id: " + eventId));
         authEventService.checkStaffAccess(eventId, admin.getId());
         if(event.getEventState().equals(EventState.FINISHED)) {
             throw new EventFinishedException("Cannot register walk-in attendee for a finished event");
         }
-        if (event.getWalkInCount() > 0) {
-            event.setWalkInCount(event.getWalkInCount() - 1);
-            eventRepository.save(event);
-            log.info("Ingresso senza prenotazione rimosso eventoId={} totale={}", eventId, event.getWalkInCount());
-        }
+        walkInCounterService.adjust(event, paymentMethod, false);
+        eventRepository.save(event);
+        log.info("Ingresso senza prenotazione rimosso eventoId={} totale={}", eventId, event.getWalkInCount());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public EventDashboardResponse getEventDashboardData(Long eventId, User admin) {
         double attendanceRate;
         Event event = eventRepository.findById(eventId)
@@ -208,6 +209,8 @@ public class EventService {
         authEventService.checkUserAccess(eventId, admin.getId());
             long totalBookings = bookingRepository.countByEventIdAndBookingStatusNot(eventId, BookingStatus.CANCELLED);
             long checkedInCount = bookingRepository.countByEventIdAndBookingStatus(eventId, BookingStatus.VALIDATED);
+            long checkedInCashCount = bookingRepository.countByEventIdAndBookingStatusAndPaymentMethod(eventId, BookingStatus.VALIDATED, PaymentMethod.CASH);
+            long checkedInCardCount = bookingRepository.countByEventIdAndBookingStatusAndPaymentMethod(eventId, BookingStatus.VALIDATED, PaymentMethod.CARD);
             long noShowCount = totalBookings - checkedInCount;
             if (totalBookings > 0) {
                 attendanceRate = (checkedInCount * 100.0) / totalBookings;
@@ -229,7 +232,13 @@ public class EventService {
                     estimatedBookingRenueve,
                     event.getWalkInCount(),
                     totalAttendees,
-                    totalRevenue);
+                    totalRevenue,
+                    checkedInCashCount,
+                    checkedInCardCount,
+                    checkedInCount - checkedInCashCount - checkedInCardCount,
+                    event.getWalkInCashCount(),
+                    event.getWalkInCardCount(),
+                    event.getWalkInCount() - event.getWalkInCashCount() - event.getWalkInCardCount());
 
     }
 

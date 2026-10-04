@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.spring.passhalo.booking.dto.BookingRequest;
 import org.spring.passhalo.booking.dto.BookingResponse;
 import org.spring.passhalo.booking.dto.CheckInResponse;
+import org.spring.passhalo.booking.dto.PaymentMethodRequest;
 import org.spring.passhalo.booking.service.BookingService;
 import org.spring.passhalo.user.entity.User;
 import org.springframework.http.HttpStatus;
@@ -72,16 +73,18 @@ public class BookingController {
     }
 
     @PatchMapping(path = "/check-in/{uuid}", produces = "application/json")
-    public ResponseEntity<CheckInResponse> checkInBooking(@PathVariable UUID uuid, @AuthenticationPrincipal User admin) {
-        CheckInResponse checkInResponse = bookingService.checkInBooking(uuid, admin);
+    public ResponseEntity<CheckInResponse> checkInBooking(@PathVariable UUID uuid, @AuthenticationPrincipal User admin,
+                                                         @Valid @RequestBody PaymentMethodRequest request) {
+        CheckInResponse checkInResponse = bookingService.checkInBooking(uuid, admin, request.paymentMethod());
         return ResponseEntity.ok(checkInResponse);
     }
 
     @PatchMapping(path = "/events/{eventId}/check-in/{uuid}", produces = "application/json")
     public ResponseEntity<CheckInResponse> checkInBookingForEvent(@PathVariable Long eventId,
                                                                    @PathVariable UUID uuid,
-                                                                   @AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(bookingService.checkInBookingForEvent(uuid, eventId, user));
+                                                                   @AuthenticationPrincipal User user,
+                                                                   @Valid @RequestBody PaymentMethodRequest request) {
+        return ResponseEntity.ok(bookingService.checkInBookingForEvent(uuid, eventId, user, request.paymentMethod()));
     }
 
 

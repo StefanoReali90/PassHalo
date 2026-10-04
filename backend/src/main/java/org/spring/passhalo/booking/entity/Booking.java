@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.spring.passhalo.booking.enums.BookingStatus;
+import org.spring.passhalo.booking.enums.PaymentMethod;
 import org.spring.passhalo.event.entity.Event;
 import org.spring.passhalo.event.enums.EventState;
 
@@ -68,6 +69,10 @@ public class Booking {
 
     @Column(nullable = true)
     private LocalDateTime checkInDateTime;
+
+    // Unknown before check-in and for historical entries collected without a method.
+    @Enumerated(EnumType.STRING)
+    private PaymentMethod paymentMethod;
 
     @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean marketingConsent = false;

@@ -219,18 +219,18 @@ const cancelled = await request('/bookings/bookingId/2', { cookie: adminCookie }
 assert.equal(cancelled.data.bookingStatus, 'CANCELLED');
 pass('creazione, ricerca, elenco e annullamento prenotazioni');
 
-const adminCheckIn = await request(`/bookings/check-in/${bookings[0].uuid}`, { method: 'PATCH', cookie: adminCookie });
+const adminCheckIn = await request(`/bookings/check-in/${bookings[0].uuid}`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: adminCookie });
 assert.equal(adminCheckIn.data.eventName, 'PassHalo E2E aggiornato');
-const staffCheckIn = await request(`/bookings/check-in/${bookings[2].uuid}`, { method: 'PATCH', cookie: staffCookie });
+const staffCheckIn = await request(`/bookings/check-in/${bookings[2].uuid}`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: staffCookie });
 assert.equal(staffCheckIn.data.name, 'Guest3');
-await request(`/bookings/check-in/${bookings[0].uuid}`, { method: 'PATCH', cookie: staffCookie, expected: [409] });
-await request(`/bookings/check-in/${bookings[1].uuid}`, { method: 'PATCH', cookie: staffCookie, expected: [409] });
+await request(`/bookings/check-in/${bookings[0].uuid}`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: staffCookie, expected: [409] });
+await request(`/bookings/check-in/${bookings[1].uuid}`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: staffCookie, expected: [409] });
 await request(`/events/${eventId}/dashboard`, { cookie: staffCookie, expected: [403] });
 pass('check-in ADMIN/STAFF, duplicato, annullato e segregazione statistiche');
 
-await request(`/events/${eventId}/walk-in`, { method: 'PATCH', cookie: adminCookie, expected: [204] });
-await request(`/events/${eventId}/walk-in`, { method: 'PATCH', cookie: adminCookie, expected: [204] });
-await request(`/events/${eventId}/walk-in/decrement`, { method: 'PATCH', cookie: adminCookie, expected: [204] });
+await request(`/events/${eventId}/walk-in`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: adminCookie, expected: [204] });
+await request(`/events/${eventId}/walk-in`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: adminCookie, expected: [204] });
+await request(`/events/${eventId}/walk-in/decrement`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: adminCookie, expected: [204] });
 const dashboard = await request(`/events/${eventId}/dashboard`, { cookie: adminCookie });
 assert.equal(dashboard.data.totalBookings, 3);
 assert.equal(dashboard.data.checkedInCount, 2);
@@ -247,7 +247,7 @@ assert.equal(finishedEvent.data.eventState, 'FINISHED');
 const anonymizedBooking = await request(`/bookings/${bookings[0].uuid}`, { cookie: adminCookie });
 assert.equal(anonymizedBooking.data.name, 'ANONYMIZED');
 assert.match(anonymizedBooking.data.email, /^anon_.+@anonymized\.local$/);
-await request(`/bookings/check-in/${bookings[3].uuid}`, { method: 'PATCH', cookie: staffCookie, expected: [409] });
+await request(`/bookings/check-in/${bookings[3].uuid}`, { method: 'PATCH', body: { paymentMethod: 'CASH' }, cookie: staffCookie, expected: [409] });
 pass('chiusura evento, anonimizzazione e blocco check-in post evento');
 
 await request('/user/recover-password', { method: 'POST', expected: [204], body: { email: adminEmail } });

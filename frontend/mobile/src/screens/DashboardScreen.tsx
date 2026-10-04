@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api } from '../api';
 import { Button, Card, LoadingBlock, Notice, PageHeader } from '../components/ui';
+import { PaymentCounts } from '../components/PaymentCounts';
+import { PaymentMethodSelector, paymentMethodLabel } from '../components/PaymentMethodSelector';
 import { colors, radii, spacing } from '../theme';
-import type { EventDashboardResponse, PassHaloEvent } from '../types';
+import type { EventDashboardResponse, PassHaloEvent, PaymentMethod } from '../types';
 
 const number = (value: number) => value.toLocaleString('it-IT');
 const money = (value: number) => value.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
@@ -16,6 +18,7 @@ export function DashboardScreen() {
   const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [walkInMethod, setWalkInMethod] = useState<PaymentMethod | null>(null);
   const selectedIdRef = useRef<number | null>(null);
 
   const loadDashboard = useCallback(async (eventId: number) => {
@@ -49,6 +52,7 @@ export function DashboardScreen() {
   const selectEvent = async (eventId: number) => {
     selectedIdRef.current = eventId;
     setSelectedId(eventId);
+    setWalkInMethod(null);
     setLoading(true);
     setMessage('');
     try {
@@ -61,15 +65,16 @@ export function DashboardScreen() {
   };
 
   const adjustWalkIn = async (direction: 'plus' | 'minus') => {
-    if (selectedId === null) return;
+    if (selectedId === null || walkInMethod === null || actionBusy || loading) return;
     setActionBusy(true);
     setError('');
     setMessage('');
     try {
-      if (direction === 'plus') await api.incrementWalkIn(selectedId);
-      else await api.decrementWalkIn(selectedId);
+      if (direction === 'plus') await api.incrementWalkIn(selectedId, walkInMethod);
+      else await api.decrementWalkIn(selectedId, walkInMethod);
       await loadDashboard(selectedId);
-      setMessage(direction === 'plus' ? 'Ingresso in cassa aggiunto.' : 'Ingresso in cassa rimosso.');
+      setMessage(`${direction === 'plus' ? 'Ingresso in cassa aggiunto' : 'Ingresso in cassa rimosso'} · ${paymentMethodLabel(walkInMethod)}.`);
+      setWalkInMethod(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Aggiornamento non riuscito.');
     } finally {
@@ -122,7 +127,7 @@ export function DashboardScreen() {
       {events.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {events.map((event) => (
-            <Pressable key={event.id} onPress={() => void selectEvent(event.id)} style={[styles.chip, event.id === selectedId && styles.chipActive]}>
+            <Pressable key={event.id} disabled={actionBusy || loading} onPress={() => void selectEvent(event.id)} style={[styles.chip, event.id === selectedId && styles.chipActive]}>
               <Text style={[styles.chipText, event.id === selectedId && styles.chipTextActive]}>{event.name}</Text>
             </Pressable>
           ))}
@@ -141,13 +146,16 @@ export function DashboardScreen() {
             <Metric label="Ricavo" value={money(data.totalRevenue)} note="Ingressi registrati" />
           </View>
 
+          <PaymentCounts data={data} />
+
           <Card>
             <Text style={styles.cardTitle}>Ingressi senza prenotazione</Text>
             <Text style={styles.walkInCount}>{number(data.walkInCount)}</Text>
             <Text style={styles.muted}>Registra chi paga direttamente in cassa.</Text>
+            <PaymentMethodSelector value={walkInMethod} onChange={setWalkInMethod} disabled={finished || actionBusy || loading} />
             <View style={styles.actions}>
-              <View style={styles.action}><Button compact label="− Rimuovi" variant="secondary" disabled={finished || data.walkInCount <= 0} busy={actionBusy} onPress={() => void adjustWalkIn('minus')} /></View>
-              <View style={styles.action}><Button compact label="+ Aggiungi" disabled={finished} busy={actionBusy} onPress={() => void adjustWalkIn('plus')} /></View>
+              <View style={styles.action}><Button compact label="− Rimuovi" variant="secondary" disabled={finished || loading || walkInMethod === null || (walkInMethod === 'CASH' ? data.walkInCashCount : data.walkInCardCount) <= 0} busy={actionBusy} onPress={() => void adjustWalkIn('minus')} /></View>
+              <View style={styles.action}><Button compact label="+ Aggiungi" disabled={finished || loading || walkInMethod === null} busy={actionBusy} onPress={() => void adjustWalkIn('plus')} /></View>
             </View>
           </Card>
 

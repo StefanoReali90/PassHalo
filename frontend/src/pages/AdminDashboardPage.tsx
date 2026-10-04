@@ -5,8 +5,11 @@ import { BookingShare } from '../components/BookingShare';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EventComparisonChart, type EventComparisonItem } from '../components/EventComparisonChart';
 import { EventResultsCharts } from '../components/EventResultsCharts';
+import { PaymentCounts } from '../components/PaymentCounts';
+import { PaymentMethodSelector } from '../components/PaymentMethodSelector';
+import { paymentMethodLabel } from '../utils/paymentMethod';
 import { closeEvent, decrementWalkInCount, getEventDashboard, getMyEvents, incrementWalkInCount } from '../api/events';
-import type { EventDashboardResponse, MyEvent } from '../types';
+import type { EventDashboardResponse, MyEvent, PaymentMethod } from '../types';
 
 const number = (value: number) => value.toLocaleString('it-IT');
 const money = (value: number) => value.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
@@ -19,6 +22,7 @@ export function AdminDashboardPage() {
     const [error, setError] = useState('');
     const [closing, setClosing] = useState(false);
     const [walkInBusy, setWalkInBusy] = useState(false);
+    const [walkInMethod, setWalkInMethod] = useState<PaymentMethod | null>(null);
     const [message, setMessage] = useState('');
     const [comparisonItems, setComparisonItems] = useState<EventComparisonItem[]>([]);
     const [comparisonVisible, setComparisonVisible] = useState(false);
@@ -80,6 +84,7 @@ export function AdminDashboardPage() {
 
     const selectEvent = (eventId: number) => {
         setSelectedEventId(eventId);
+        setWalkInMethod(null);
         const url = new URL(window.location.href);
         url.searchParams.set('eventId', String(eventId));
         window.history.replaceState(null, '', url);
@@ -109,17 +114,18 @@ export function AdminDashboardPage() {
     };
 
     const adjustWalkIns = async (direction: 'increment' | 'decrement') => {
-        if (selectedEventId === null) return;
+        if (selectedEventId === null || walkInMethod === null || walkInBusy || busy || closing) return;
         setWalkInBusy(true);
         setError('');
         setMessage('');
         try {
-            if (direction === 'increment') await incrementWalkInCount(selectedEventId);
-            else await decrementWalkInCount(selectedEventId);
+            if (direction === 'increment') await incrementWalkInCount(selectedEventId, walkInMethod);
+            else await decrementWalkInCount(selectedEventId, walkInMethod);
             await loadDashboard(selectedEventId);
             setComparisonItems([]);
             setComparisonVisible(false);
-            setMessage(direction === 'increment' ? 'Ingresso in cassa registrato.' : 'Ingresso in cassa rimosso.');
+            setMessage(`${direction === 'increment' ? 'Ingresso in cassa registrato' : 'Ingresso in cassa rimosso'} · ${paymentMethodLabel(walkInMethod)}.`);
+            setWalkInMethod(null);
         } catch (requestError) {
             setError(requestError instanceof Error ? requestError.message : 'Aggiornamento ingressi non riuscito.');
         } finally {
@@ -181,7 +187,7 @@ export function AdminDashboardPage() {
                     <div>
                         <span className="eyebrow">Evento selezionato</span>
                         {events.length > 1 ? (
-                            <select className="event-selector" value={selectedEventId ?? ''} onChange={(event) => selectEvent(Number(event.target.value))} aria-label="Seleziona evento">
+                            <select className="event-selector" value={selectedEventId ?? ''} disabled={walkInBusy || closing || busy} onChange={(event) => selectEvent(Number(event.target.value))} aria-label="Seleziona evento">
                                 {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
                             </select>
                         ) : <strong>{eventName}</strong>}
@@ -222,6 +228,7 @@ export function AdminDashboardPage() {
                     </div>
 
                     <EventResultsCharts data={data} event={selectedEvent} />
+                    <PaymentCounts data={data} />
                     {comparisonVisible && comparisonItems.length >= 2 && <EventComparisonChart items={comparisonItems} />}
 
                     <BookingShare eventId={selectedEventId} />
@@ -230,10 +237,11 @@ export function AdminDashboardPage() {
                         <article className="panel operations walk-in-operation">
                             <span className="eyebrow">Ingressi senza pass</span>
                             <h2>Ingressi in cassa: {number(data.walkInCount)}</h2>
-                            <p>Registra chi acquista direttamente all’ingresso oppure correggi l’ultimo conteggio.</p>
+                            <p>Seleziona il metodo per aggiungere un ingresso o correggere il relativo conteggio.</p>
+                            <PaymentMethodSelector value={walkInMethod} onChange={setWalkInMethod} disabled={walkInBusy || busy || closing || isFinished} />
                             <div className="counter-actions">
-                                <button className="button" disabled={walkInBusy || data.walkInCount <= 0 || isFinished} onClick={() => void adjustWalkIns('decrement')}><Minus size={17} /> Rimuovi</button>
-                                <button className="button primary" disabled={walkInBusy || isFinished} onClick={() => void adjustWalkIns('increment')}><Plus size={17} /> Aggiungi ingresso</button>
+                                <button className="button" disabled={walkInBusy || busy || closing || walkInMethod === null || (walkInMethod === 'CASH' ? data.walkInCashCount : data.walkInCardCount) <= 0 || isFinished} onClick={() => void adjustWalkIns('decrement')}><Minus size={17} /> Rimuovi</button>
+                                <button className="button primary" disabled={walkInBusy || busy || closing || walkInMethod === null || isFinished} onClick={() => void adjustWalkIns('increment')}><Plus size={17} /> Aggiungi ingresso</button>
                             </div>
                         </article>
                         <article className="panel operations">

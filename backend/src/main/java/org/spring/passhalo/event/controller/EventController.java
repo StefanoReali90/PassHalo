@@ -1,5 +1,7 @@
 package org.spring.passhalo.event.controller;
 
+import org.spring.passhalo.booking.dto.PaymentMethodRequest;
+
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -70,14 +72,16 @@ public class EventController {
     }
 
     @PatchMapping(path = "/{id}/walk-in")
-    public ResponseEntity<Void> incrementWalkInCount(@PathVariable Long id, @AuthenticationPrincipal User admin) {
-        eventService.incrementWalkInCount(id,admin);
+    public ResponseEntity<Void> incrementWalkInCount(@PathVariable Long id, @AuthenticationPrincipal User admin,
+                                                    @Valid @RequestBody PaymentMethodRequest request) {
+        eventService.incrementWalkInCount(id, admin, request.paymentMethod());
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping(path = "/{id}/walk-in/decrement")
-    public ResponseEntity<Void> decrementWalkInCount(@PathVariable Long id, @AuthenticationPrincipal User admin) {
-        eventService.decrementWalkInCount(id, admin);
+    public ResponseEntity<Void> decrementWalkInCount(@PathVariable Long id, @AuthenticationPrincipal User admin,
+                                                    @Valid @RequestBody PaymentMethodRequest request) {
+        eventService.decrementWalkInCount(id, admin, request.paymentMethod());
         return ResponseEntity.noContent().build();
     }
 

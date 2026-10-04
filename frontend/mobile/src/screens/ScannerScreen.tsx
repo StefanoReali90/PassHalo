@@ -5,9 +5,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, QrCode, XCircle } from 'lucide-react-native';
 import { api } from '../api';
 import { Button, Card, Field, Notice, PageHeader } from '../components/ui';
+import { PaymentMethodSelector, paymentMethodLabel } from '../components/PaymentMethodSelector';
 import { colors, radii, spacing } from '../theme';
 import { isEventBookable } from '../eventAvailability';
-import type { MyEvent } from '../types';
+import type { MyEvent, PaymentMethod } from '../types';
 
 const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 
@@ -33,6 +34,12 @@ export function ScannerScreen() {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [eventsError, setEventsError] = useState('');
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [walkInMethod, setWalkInMethod] = useState<PaymentMethod | null>(null);
+  const [walkInBusy, setWalkInBusy] = useState(false);
+  const [walkInMessage, setWalkInMessage] = useState('');
+  const [sessionWalkIns, setSessionWalkIns] = useState<Record<string, number>>({});
+  const sessionKey = `${selectedEventId}:${walkInMethod}`;
 
   const loadEvents = useCallback(async () => {
     setEventsLoading(true);
@@ -53,13 +60,14 @@ export function ScannerScreen() {
 
   const validate = useCallback(async (rawValue: string) => {
     const uuid = extractUuid(rawValue);
-    if (!uuid || busy || locked || selectedEventId === null) return;
+    if (!uuid || busy || walkInBusy || locked || selectedEventId === null || paymentMethod === null) return;
     setBusy(true);
     setLocked(true);
     setResult(null);
     try {
-      const checked = await api.checkIn(uuid, selectedEventId);
-      const message = `Pass convalidato · ${checked.eventName}`;
+      const checked = await api.checkIn(uuid, selectedEventId, paymentMethod);
+      const message = `Pass convalidato · ${checked.eventName} · ${paymentMethodLabel(paymentMethod)}`;
+      setPaymentMethod(null);
       setResult({ ok: true, message });
       setManualCode('');
       setHistory((current) => [{ id: `${Date.now()}`, ok: true, message, time: new Date().toLocaleTimeString('it-IT') }, ...current].slice(0, 6));
@@ -72,7 +80,26 @@ export function ScannerScreen() {
     } finally {
       setBusy(false);
     }
-  }, [busy, locked, selectedEventId]);
+  }, [busy, walkInBusy, locked, selectedEventId, paymentMethod]);
+
+  const adjustWalkIn = async (increment: boolean) => {
+    if (selectedEventId === null || walkInMethod === null || busy || walkInBusy) return;
+    if (!increment && (sessionWalkIns[sessionKey] ?? 0) <= 0) return;
+    setWalkInBusy(true);
+    setWalkInMessage('');
+    setEventsError('');
+    try {
+      if (increment) await api.incrementWalkIn(selectedEventId, walkInMethod);
+      else await api.decrementWalkIn(selectedEventId, walkInMethod);
+      setSessionWalkIns((current) => ({ ...current, [sessionKey]: (current[sessionKey] ?? 0) + (increment ? 1 : -1) }));
+      setWalkInMessage(`${increment ? 'Ingresso registrato' : 'Ingresso rimosso'} · ${paymentMethodLabel(walkInMethod)}.`);
+      setWalkInMethod(null);
+    } catch (error) {
+      setEventsError(error instanceof Error ? error.message : 'Conteggio non aggiornato.');
+    } finally {
+      setWalkInBusy(false);
+    }
+  };
 
   const onBarcodeScanned = ({ data }: BarcodeScanningResult) => {
     void validate(data);
@@ -95,7 +122,7 @@ export function ScannerScreen() {
           <Text style={styles.cameraTitle}>Evento da controllare</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eventRow}>
             {events.map((event) => (
-              <Pressable key={event.id} onPress={() => setSelectedEventId(event.id)}
+              <Pressable key={event.id} disabled={busy || walkInBusy} onPress={() => { setSelectedEventId(event.id); setPaymentMethod(null); setWalkInMethod(null); setWalkInMessage(''); }}
                 accessibilityRole="button" accessibilityState={{ selected: selectedEventId === event.id }}
                 style={[styles.eventChoice, selectedEventId === event.id && styles.eventChoiceSelected]}>
                 <Text style={styles.eventChoiceText}>{event.name}</Text>
@@ -115,6 +142,7 @@ export function ScannerScreen() {
       ) : null}
 
       <Card style={styles.cameraCard}>
+        <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} disabled={busy || walkInBusy} label="Pagamento del pass da convalidare" />
         {!permission ? (
           <View style={styles.cameraPlaceholder}><Text style={styles.muted}>Verifica permesso fotocamera…</Text></View>
         ) : !permission.granted ? (
@@ -130,7 +158,7 @@ export function ScannerScreen() {
               style={StyleSheet.absoluteFill}
               facing="back"
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={locked || selectedEventId === null ? undefined : onBarcodeScanned}
+              onBarcodeScanned={busy || walkInBusy || locked || selectedEventId === null || paymentMethod === null ? undefined : onBarcodeScanned}
             />
             <View pointerEvents="none" style={styles.target} />
           </View>
@@ -138,7 +166,16 @@ export function ScannerScreen() {
 
         <Text style={styles.or}>oppure inserisci il codice</Text>
         <Field label="UUID del pass" value={manualCode} onChangeText={setManualCode} autoCapitalize="none" autoCorrect={false} />
-        <Button label="Convalida" onPress={() => void validate(manualCode)} busy={busy} disabled={!manualCode.trim() || locked || selectedEventId === null} />
+        <Button label="Convalida" onPress={() => void validate(manualCode)} busy={busy} disabled={walkInBusy || !manualCode.trim() || locked || selectedEventId === null || paymentMethod === null} />
+      </Card>
+
+      <Card>
+        <Text style={styles.cameraTitle}>Ingressi senza prenotazione</Text>
+        <Text style={styles.muted}>Registrati da questo dispositivo: {sessionWalkIns[`${selectedEventId}:CASH`] ?? 0} contanti · {sessionWalkIns[`${selectedEventId}:CARD`] ?? 0} carta</Text>
+        <PaymentMethodSelector value={walkInMethod} onChange={setWalkInMethod} disabled={busy || walkInBusy} />
+        <Button label="Aggiungi ingresso" onPress={() => void adjustWalkIn(true)} busy={walkInBusy} disabled={busy || selectedEventId === null || walkInMethod === null} />
+        <Button label="Correggi metodo selezionato" variant="secondary" onPress={() => void adjustWalkIn(false)} disabled={busy || walkInBusy || selectedEventId === null || walkInMethod === null || (sessionWalkIns[sessionKey] ?? 0) <= 0} />
+        {walkInMessage ? <Notice tone="success">{walkInMessage}</Notice> : null}
       </Card>
 
       <Card>

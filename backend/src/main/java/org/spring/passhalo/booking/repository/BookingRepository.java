@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.spring.passhalo.booking.entity.Booking;
 import org.spring.passhalo.booking.enums.BookingStatus;
+import org.spring.passhalo.booking.enums.PaymentMethod;
 import org.spring.passhalo.event.entity.Event;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -40,4 +41,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findTop500ByEmailLookupHashIsNullAndEmailIsNotNullOrderByIdAsc();
 
     long countByEventIdAndBookingStatus(Long eventId, BookingStatus bookingStatus);
+
+    long countByEventIdAndBookingStatusAndPaymentMethod(Long eventId, BookingStatus bookingStatus, PaymentMethod paymentMethod);
 }

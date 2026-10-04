@@ -53,6 +53,12 @@ public class Event {
     @Column(nullable = false)
     private int walkInCount = 0;
 
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int walkInCashCount = 0;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int walkInCardCount = 0;
+
     @Column(length = 2048)
     private String videoUrl;
 

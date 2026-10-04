@@ -8,6 +8,7 @@ import type {
   EventRequest,
   LoginResponse,
   MyEvent,
+  PaymentMethod,
   User,
 } from '../types';
 
@@ -150,16 +151,16 @@ export const api = {
     return apiFetch<void>(`/bookings/${segment(uuid)}`, { method: 'DELETE' });
   },
 
-  checkIn(uuid: string, eventId: number) {
-    return apiFetch<CheckInResponse>(`/bookings/events/${eventId}/check-in/${segment(uuid)}`, { method: 'PATCH' });
+  checkIn(uuid: string, eventId: number, paymentMethod: PaymentMethod) {
+    return apiFetch<CheckInResponse>(`/bookings/events/${eventId}/check-in/${segment(uuid)}`, { method: 'PATCH', body: JSON.stringify({ paymentMethod }) });
   },
 
-  incrementWalkIn(eventId: number) {
-    return apiFetch<void>(`/events/${eventId}/walk-in`, { method: 'PATCH' });
+  incrementWalkIn(eventId: number, paymentMethod: PaymentMethod) {
+    return apiFetch<void>(`/events/${eventId}/walk-in`, { method: 'PATCH', body: JSON.stringify({ paymentMethod }) });
   },
 
-  decrementWalkIn(eventId: number) {
-    return apiFetch<void>(`/events/${eventId}/walk-in/decrement`, { method: 'PATCH' });
+  decrementWalkIn(eventId: number, paymentMethod: PaymentMethod) {
+    return apiFetch<void>(`/events/${eventId}/walk-in/decrement`, { method: 'PATCH', body: JSON.stringify({ paymentMethod }) });
   },
 
   closeEvent(eventId: number) {

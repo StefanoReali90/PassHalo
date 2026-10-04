@@ -72,7 +72,7 @@ class EventJoinFlowIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.state").value("PENDING"));
         assertTrue(membershipRepository.findByEventIdAndCollaboratorId(event.getId(), staff.getId()).isEmpty());
-        mockMvc.perform(patch("/events/{eventId}/walk-in", event.getId()).with(user(staff)))
+        mockMvc.perform(patch("/events/{eventId}/walk-in", event.getId()).with(user(staff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/events/{eventId}/join-requests", event.getId()).with(user(staff)))
@@ -98,7 +98,7 @@ class EventJoinFlowIntegrationTest {
         assertEquals(EventRole.STAFF, membership.getRole());
         assertEquals(MembershipState.ACTIVE, membership.getMembershipState());
         assertNotNull(membership.getValidFrom());
-        mockMvc.perform(patch("/events/{eventId}/walk-in", event.getId()).with(user(staff)))
+        mockMvc.perform(patch("/events/{eventId}/walk-in", event.getId()).with(user(staff)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/join-requests/my").with(user(staff)))
                 .andExpect(status().isOk())
