@@ -10,6 +10,7 @@ interface ApiProblem {
 
 interface ApiRequestOptions extends RequestInit {
     timeoutMs?: number;
+    responseType?: 'json' | 'blob';
 }
 
 export class ApiError extends Error {
@@ -54,7 +55,7 @@ function parseProblem(raw: string): ApiProblem | null {
 }
 
 export async function apiFetch<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
-    const { timeoutMs = 15_000, signal: externalSignal, ...requestOptions } = options;
+    const { timeoutMs = 15_000, signal: externalSignal, responseType = 'json', ...requestOptions } = options;
     const controller = new AbortController();
     let timedOut = false;
     const forwardAbort = () => controller.abort(externalSignal?.reason);
@@ -65,7 +66,7 @@ export async function apiFetch<T>(endpoint: string, options: ApiRequestOptions =
     }, timeoutMs);
 
     const headers = new Headers(requestOptions.headers);
-    headers.set('Accept', 'application/json');
+    headers.set('Accept', responseType === 'blob' ? 'text/csv' : 'application/json');
     if (requestOptions.body && !(requestOptions.body instanceof FormData) && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
     }
@@ -102,6 +103,8 @@ export async function apiFetch<T>(endpoint: string, options: ApiRequestOptions =
     }
 
     if (response.status === 204) return null as T;
+
+    if (responseType === 'blob') return await response.blob() as T;
 
     const body = await response.text();
     if (!body.trim()) return null as T;

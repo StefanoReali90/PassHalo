@@ -37,3 +37,9 @@ Per i database creati prima del conteggio Contanti/Carta, esegui prima del riavv
 prenotazioni e i due contatori agli eventi. Gli ingressi storici rimangono
 "Metodo non registrato". Aggiorna insieme backend, web e app mobile: i nuovi
 endpoint di ingresso richiedono il campo JSON `paymentMethod` (`CASH` o `CARD`).
+
+Per un database che contiene `brevo_connection` e `brevo_sync_job`, arresta il
+backend precedente ed esegui `db/migrations/20261004_generic_marketing.sql`
+prima di avviare quello aggiornato. La migrazione conserva connessioni e job
+nei nuovi modelli generici. Esportazione CSV e integrazioni automatiche sono
+documentate in [GENERIC_MARKETING.md](../GENERIC_MARKETING.md).

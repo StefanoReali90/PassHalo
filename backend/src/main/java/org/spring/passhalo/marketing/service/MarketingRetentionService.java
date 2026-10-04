@@ -15,14 +15,14 @@ import java.time.LocalDateTime;
 @Slf4j
 public class MarketingRetentionService {
     private final MarketingRepository marketingRepository;
-    private final BrevoSyncService brevoSyncService;
+    private final MarketingSyncService marketingSyncService;
 
     @Scheduled(cron = "0 20 3 * * *", zone = "Europe/Rome")
     @Transactional
     public void deleteExpiredSubscribers() {
         for (MarketingSubscriber subscriber : marketingRepository.findAllByExpiresAtBefore(LocalDateTime.now())) {
             if (subscriber.getOwner() != null) {
-                brevoSyncService.queue(subscriber.getOwner(), subscriber.getEmailLookupHash(),
+                marketingSyncService.queue(subscriber.getOwner(), subscriber.getEmailLookupHash(),
                         subscriber.getEmailCiphertext());
             }
         }

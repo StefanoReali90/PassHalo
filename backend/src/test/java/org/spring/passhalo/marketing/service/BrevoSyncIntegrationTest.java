@@ -1,9 +1,9 @@
 package org.spring.passhalo.marketing.service;
 
 import org.junit.jupiter.api.Test;
-import org.spring.passhalo.marketing.entity.BrevoConnection;
-import org.spring.passhalo.marketing.repository.BrevoConnectionRepository;
-import org.spring.passhalo.marketing.repository.BrevoSyncJobRepository;
+import org.spring.passhalo.marketing.entity.MarketingConnection;
+import org.spring.passhalo.marketing.repository.MarketingConnectionRepository;
+import org.spring.passhalo.marketing.repository.MarketingSyncJobRepository;
 import org.spring.passhalo.security.PiiCryptoService;
 import org.spring.passhalo.user.entity.User;
 import org.spring.passhalo.user.enums.Role;
@@ -20,10 +20,10 @@ import static org.mockito.Mockito.verify;
 @Transactional
 class BrevoSyncIntegrationTest {
     @Autowired private UserRepository userRepository;
-    @Autowired private BrevoConnectionRepository connectionRepository;
-    @Autowired private BrevoSyncJobRepository jobRepository;
+    @Autowired private MarketingConnectionRepository connectionRepository;
+    @Autowired private MarketingSyncJobRepository jobRepository;
     @Autowired private MarketingService marketingService;
-    @Autowired private BrevoSyncService syncService;
+    @Autowired private MarketingSyncService syncService;
     @Autowired private PiiCryptoService cryptoService;
     @MockitoBean private BrevoApiClient apiClient;
 
@@ -37,25 +37,23 @@ class BrevoSyncIntegrationTest {
         owner.setRole(Role.ADMIN);
         owner = userRepository.saveAndFlush(owner);
 
-        BrevoConnection connection = new BrevoConnection();
+        MarketingConnection connection = new MarketingConnection();
         connection.setOwner(owner);
-        connection.setApiKeyCiphertext(cryptoService.encrypt("test-brevo-key"));
-        connection.setListId(42L);
-        connection.setOrganizationId("organization-1");
-        connection.setWebhookId(77L);
-        connection.setWebhookSecretHash("a".repeat(64));
+        connection.setCredentialsCiphertext(cryptoService.encrypt("test-brevo-key"));
+        connection.setProvider(BrevoSettings.PROVIDER);
+        connection.setConfiguration(new BrevoSettings(42L, "organization-1", 77L, "a".repeat(64)).serialize());
         connectionRepository.saveAndFlush(connection);
 
         String token = marketingService.registerConsent(owner, 123L, "Ada", "Lovelace", "ada@example.test");
-        assertEquals(1, jobRepository.countByOwnerId(owner.getId()));
+        assertEquals(1, jobRepository.countByConnectionOwnerId(owner.getId()));
         syncService.flushPending();
         verify(apiClient).upsertContact("test-brevo-key", 42L, "ada@example.test", "Ada", "Lovelace");
-        assertEquals(0, jobRepository.countByOwnerId(owner.getId()));
+        assertEquals(0, jobRepository.countByConnectionOwnerId(owner.getId()));
 
         marketingService.unsubscribe(token);
-        assertEquals(1, jobRepository.countByOwnerId(owner.getId()));
+        assertEquals(1, jobRepository.countByConnectionOwnerId(owner.getId()));
         syncService.flushPending();
         verify(apiClient).removeFromList("test-brevo-key", 42L, "ada@example.test");
-        assertEquals(0, jobRepository.countByOwnerId(owner.getId()));
+        assertEquals(0, jobRepository.countByConnectionOwnerId(owner.getId()));
     }
 }

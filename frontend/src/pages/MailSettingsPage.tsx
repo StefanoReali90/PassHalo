@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Mail } from 'lucide-react';
 import { connectBrevo, disconnectBrevo, getBrevoStatus, rotateBrevoKey, type BrevoStatus } from '../api/brevo';
+import { downloadMarketingContacts } from '../api/marketing';
 import { deleteSmtpSettings, getSmtpSettings, saveSmtpSettings, testSmtpSettings, type SmtpSettings, type SmtpSettingsInput } from '../api/smtp';
 import { SettingsNavigation } from '../components/SettingsNavigation';
 import { useAuth } from '../context/useAuth';
@@ -11,11 +12,15 @@ export function MailSettingsPage() {
     const [brevoBusy, setBrevoBusy] = useState(false);
     const [brevoError, setBrevoError] = useState('');
     const [brevoMessage, setBrevoMessage] = useState('');
+    const [marketingMode, setMarketingMode] = useState<'CSV' | 'BREVO'>('CSV');
+    const [exportBusy, setExportBusy] = useState(false);
+    const [exportError, setExportError] = useState('');
+    const [exportMessage, setExportMessage] = useState('');
     const [smtpStatus, setSmtpStatus] = useState<SmtpSettings | null>(null);
     const [smtpBusy, setSmtpBusy] = useState(false);
     const [smtpError, setSmtpError] = useState('');
     const [smtpMessage, setSmtpMessage] = useState('');
-    const [smtp, setSmtp] = useState<SmtpSettingsInput>({ host: 'smtp-relay.brevo.com', port: 587,
+    const [smtp, setSmtp] = useState<SmtpSettingsInput>({ host: '', port: 587,
         encryption: 'STARTTLS', username: '', password: '', fromEmail: '', fromName: '' });
 
     useEffect(() => {
@@ -68,8 +73,15 @@ export function MailSettingsPage() {
     useEffect(() => {
         if (user?.role !== 'ADMIN') return;
         let active = true;
+        let initial = true;
         const refresh = () => {
-            getBrevoStatus().then(status => { if (active) setBrevoStatus(status); })
+            getBrevoStatus().then(status => {
+                if (active) {
+                    setBrevoStatus(status);
+                    if (initial) setMarketingMode(status.connected ? 'BREVO' : 'CSV');
+                    initial = false;
+                }
+            })
                 .catch(error => { if (active) setBrevoError(error instanceof Error ? error.message : 'Stato Brevo non disponibile.'); });
         };
         refresh();
@@ -94,6 +106,16 @@ export function MailSettingsPage() {
         } finally {
             setBrevoBusy(false);
         }
+    };
+
+    const exportContacts = async () => {
+        setExportBusy(true); setExportError(''); setExportMessage('');
+        try {
+            await downloadMarketingContacts();
+            setExportMessage('CSV scaricato. Importalo nel servizio che usi per le campagne.');
+        } catch (error) {
+            setExportError(error instanceof Error ? error.message : 'Esportazione non riuscita.');
+        } finally { setExportBusy(false); }
     };
 
     const replaceBrevoKey = async (event: FormEvent<HTMLFormElement>) => {
@@ -146,7 +168,7 @@ export function MailSettingsPage() {
                     <article className="panel editor-panel">
                         <div className="panel-heading"><div><span className="eyebrow">Email eventi</span><h2>Mittente e server SMTP</h2></div><Mail size={21} /></div>
                         <p>Le conferme con QR e gli inviti dei tuoi eventi partiranno dal tuo server email. Senza configurazione continuerà a essere usato il mittente di PassHalo.</p>
-                        <p>Per Brevo usa il login SMTP e una chiave SMTP, diversi dalla chiave API della sezione marketing. Il mittente deve essere verificato nel provider.</p>
+                        <p>Usa le credenziali SMTP del tuo provider. Se sono previste anche chiavi API per il marketing, verifica di usare qui la password o chiave SMTP. Il mittente deve essere verificato nel provider.</p>
                         {smtpError && <div className="notice error" role="alert">{smtpError}</div>}
                         {smtpMessage && <div className="notice success" role="status">{smtpMessage}</div>}
                         {smtpStatus?.configured && <div className="notice success" role="status">SMTP configurato: {smtpStatus.fromName} &lt;{smtpStatus.fromEmail}&gt;</div>}
@@ -184,34 +206,53 @@ export function MailSettingsPage() {
                 )}
                 {user?.role === 'ADMIN' && (
                     <article className="panel editor-panel">
-                        <div className="panel-heading"><div><span className="eyebrow">Marketing</span><h2>Account Brevo marketing</h2></div><Mail size={21} /></div>
-                        <p>Collega anche un account Brevo dedicato o gestito da un collaboratore, con la sua chiave API e lista. Solo i contatti che hanno dato il consenso per i tuoi eventi verranno sincronizzati.</p>
-                        {brevoError && <div className="notice error" role="alert">{brevoError}</div>}
-                        {brevoMessage && <div className="notice success" role="status">{brevoMessage}</div>}
-                        {brevoStatus?.connected ? (
-                            <>
-                                <div className="notice success" role="status">
-                                    Brevo collegato alla lista {brevoStatus.listId}.
-                                    {brevoStatus.pendingContacts > 0 && ` Contatti in attesa di sincronizzazione: ${brevoStatus.pendingContacts}.`}
-                                </div>
-                                <form className="management-form" onSubmit={replaceBrevoKey}>
-                                    <p>Se la chiave è scaduta o è stata revocata, creane una nuova nello stesso account Brevo. La lista e i contatti in attesa restano associati al tuo account.</p>
-                                    <label>Nuova chiave API Brevo<input name="apiKey" type="password" autoComplete="off" maxLength={512} required /></label>
-                                    <button className="button secondary" disabled={brevoBusy}>{brevoBusy ? 'Aggiornamento…' : 'Sostituisci chiave API'}</button>
+                        <div className="panel-heading"><div><span className="eyebrow">Marketing</span><h2>Contatti per le campagne</h2></div><Mail size={21} /></div>
+                        <p>Usa i contatti con consenso per le campagne del tuo servizio email. Puoi importarli tramite CSV oppure usare una delle integrazioni automatiche disponibili.</p>
+                        <div className="management-form"><label>Modalità
+                            <select value={marketingMode} onChange={event => setMarketingMode(event.target.value as 'CSV' | 'BREVO')}>
+                                <option value="CSV">CSV — importazione nel tuo provider</option>
+                                <option value="BREVO">Brevo — sincronizzazione automatica</option>
+                            </select>
+                        </label></div>
+                        {brevoStatus?.connected && marketingMode === 'CSV' && <p>La sincronizzazione automatica con Brevo resta attiva. Puoi gestirla scegliendo la modalità Brevo.</p>}
+                        {marketingMode === 'CSV' ? <>
+                            <p>Il file contiene email, nome, cognome e date del consenso. Nel tuo provider importa il CSV e associa le colonne ai campi dei contatti. Sono inclusi soltanto i consensi attivi e non scaduti dei tuoi eventi.</p>
+                            <p>Il CSV è una copia dei contatti al momento del download: non aggiorna automaticamente le liste già importate. Prima delle campagne aggiorna la lista e rimuovi anche nel provider i contatti che hanno revocato il consenso in PassHalo.</p>
+                            {exportError && <div className="notice error" role="alert">{exportError}</div>}
+                            {exportMessage && <div className="notice success" role="status">{exportMessage}</div>}
+                            <button className="button primary full" type="button" onClick={exportContacts} disabled={exportBusy}>
+                                {exportBusy ? 'Esportazione…' : 'Scarica contatti CSV'}
+                            </button>
+                        </> : <>
+                            <h3>Account Brevo</h3>
+                            <p>Collega anche un account Brevo dedicato o gestito da un collaboratore, con la sua chiave API e lista. Solo i contatti che hanno dato il consenso per i tuoi eventi verranno sincronizzati.</p>
+                            {brevoError && <div className="notice error" role="alert">{brevoError}</div>}
+                            {brevoMessage && <div className="notice success" role="status">{brevoMessage}</div>}
+                            {brevoStatus?.connected ? (
+                                <>
+                                    <div className="notice success" role="status">
+                                        Brevo collegato alla lista {brevoStatus.listId}.
+                                        {brevoStatus.pendingContacts > 0 && ` Contatti in attesa di sincronizzazione: ${brevoStatus.pendingContacts}.`}
+                                    </div>
+                                    <form className="management-form" onSubmit={replaceBrevoKey}>
+                                        <p>Se la chiave è scaduta o è stata revocata, creane una nuova nello stesso account Brevo. La lista e i contatti in attesa restano associati al tuo account.</p>
+                                        <label>Nuova chiave API Brevo<input name="apiKey" type="password" autoComplete="off" maxLength={512} required /></label>
+                                        <button className="button secondary" disabled={brevoBusy}>{brevoBusy ? 'Aggiornamento…' : 'Sostituisci chiave API'}</button>
+                                    </form>
+                                    <button className="button secondary" type="button" onClick={removeBrevo}
+                                        disabled={brevoBusy || brevoStatus.pendingContacts > 0}>
+                                        {brevoBusy ? 'Scollegamento…' : 'Scollega Brevo'}
+                                    </button>
+                                </>
+                            ) : brevoStatus ? (
+                                <form className="management-form" onSubmit={submitBrevo}>
+                                    <p>Crea una lista e una chiave API dedicata a PassHalo nel tuo account Brevo. La chiave dà accesso all'intero account: verrà custodita cifrata sul server e non sarà più mostrata qui.</p>
+                                    <label>ID della lista Brevo<input name="listId" type="number" min="1" step="1" required /></label>
+                                    <label>Chiave API Brevo<input name="apiKey" type="password" autoComplete="off" maxLength={512} required /></label>
+                                    <button className="button primary full" disabled={brevoBusy}>{brevoBusy ? 'Collegamento…' : 'Collega Brevo'}</button>
                                 </form>
-                                <button className="button secondary" type="button" onClick={removeBrevo}
-                                    disabled={brevoBusy || brevoStatus.pendingContacts > 0}>
-                                    {brevoBusy ? 'Scollegamento…' : 'Scollega Brevo'}
-                                </button>
-                            </>
-                        ) : brevoStatus ? (
-                            <form className="management-form" onSubmit={submitBrevo}>
-                                <p>Crea una lista e una chiave API dedicata a PassHalo nel tuo account Brevo. La chiave dà accesso all'intero account: verrà custodita cifrata sul server e non sarà più mostrata qui.</p>
-                                <label>ID della lista Brevo<input name="listId" type="number" min="1" step="1" required /></label>
-                                <label>Chiave API Brevo<input name="apiKey" type="password" autoComplete="off" maxLength={512} required /></label>
-                                <button className="button primary full" disabled={brevoBusy}>{brevoBusy ? 'Collegamento…' : 'Collega Brevo'}</button>
-                            </form>
-                        ) : null}
+                            ) : null}
+                        </>}
                     </article>
                 )}
             </div>

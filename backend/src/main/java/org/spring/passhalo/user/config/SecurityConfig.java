@@ -83,6 +83,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/marketing/unsubscribe").permitAll()
                         .requestMatchers(HttpMethod.POST, "/marketing/brevo/webhook/{ownerId}").permitAll()
                         .requestMatchers("/marketing/brevo", "/marketing/brevo/").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/marketing/contacts.csv").hasRole("ADMIN")
                         .requestMatchers("/account/smtp", "/account/smtp/").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/account/smtp/test").hasRole("ADMIN")
                         .requestMatchers("/staff-access/**").permitAll()

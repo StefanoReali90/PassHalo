@@ -2,9 +2,9 @@ package org.spring.passhalo.marketing.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
-import org.spring.passhalo.marketing.entity.BrevoConnection;
-import org.spring.passhalo.marketing.repository.BrevoConnectionRepository;
-import org.spring.passhalo.marketing.repository.BrevoSyncJobRepository;
+import org.spring.passhalo.marketing.entity.MarketingConnection;
+import org.spring.passhalo.marketing.repository.MarketingConnectionRepository;
+import org.spring.passhalo.marketing.repository.MarketingSyncJobRepository;
 import org.spring.passhalo.marketing.repository.MarketingRepository;
 import org.spring.passhalo.security.PiiCryptoService;
 import org.spring.passhalo.user.entity.User;
@@ -29,13 +29,13 @@ import java.util.HexFormat;
 public class BrevoConnectionService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private final BrevoConnectionRepository connectionRepository;
-    private final BrevoSyncJobRepository jobRepository;
+    private final MarketingConnectionRepository connectionRepository;
+    private final MarketingSyncJobRepository jobRepository;
     private final MarketingRepository marketingRepository;
     private final UserRepository userRepository;
     private final PiiCryptoService cryptoService;
     private final BrevoApiClient apiClient;
-    private final BrevoSyncService syncService;
+    private final MarketingSyncService syncService;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -44,8 +44,9 @@ public class BrevoConnectionService {
     public Status status(String username) {
         User owner = owner(username);
         return connectionRepository.findByOwnerId(owner.getId())
-                .map(connection -> new Status(true, connection.getListId(),
-                        jobRepository.countByOwnerId(owner.getId())))
+                .filter(connection -> BrevoSettings.PROVIDER.equals(connection.getProvider()))
+                .map(connection -> new Status(true, BrevoSettings.from(connection).listId(),
+                        jobRepository.countByConnectionOwnerId(owner.getId())))
                 .orElseGet(() -> new Status(false, null, 0));
     }
 
@@ -53,7 +54,7 @@ public class BrevoConnectionService {
     public Status connect(String username, String rawApiKey, long listId) {
         User owner = owner(username);
         if (connectionRepository.findByOwnerId(owner.getId()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Brevo è già collegato");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Un provider marketing è già collegato");
         }
         String apiKey = validatedApiKey(rawApiKey);
         if (listId <= 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lista Brevo non valida");
@@ -74,30 +75,29 @@ public class BrevoConnectionService {
         } catch (BrevoApiClient.BrevoApiException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Impossibile configurare la disiscrizione Brevo");
         }
-        BrevoConnection connection = new BrevoConnection();
+        MarketingConnection connection = new MarketingConnection();
         connection.setOwner(owner);
-        connection.setListId(listId);
-        connection.setOrganizationId(organizationId);
-        connection.setApiKeyCiphertext(cryptoService.encrypt(apiKey));
-        connection.setWebhookId(webhookId);
-        connection.setWebhookSecretHash(sha256(webhookSecret));
+        connection.setProvider(BrevoSettings.PROVIDER);
+        connection.setCredentialsCiphertext(cryptoService.encrypt(apiKey));
+        connection.setConfiguration(new BrevoSettings(listId, organizationId, webhookId, sha256(webhookSecret)).serialize());
         connectionRepository.saveAndFlush(connection);
         syncService.queueAllActive(owner);
-        return new Status(true, listId, jobRepository.countByOwnerId(owner.getId()));
+        return new Status(true, listId, jobRepository.countByConnectionOwnerId(owner.getId()));
     }
 
     @Transactional
     public Status rotateKey(String username, String rawApiKey) {
         User owner = owner(username);
-        BrevoConnection connection = connectionRepository.findByOwnerId(owner.getId()).orElseThrow(
+        MarketingConnection connection = connectionRepository.findByOwnerId(owner.getId()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Brevo non è collegato"));
+        BrevoSettings settings = settings(connection);
         String apiKey = validatedApiKey(rawApiKey);
         try {
-            if (!connection.getOrganizationId().equals(apiClient.accountOrganizationId(apiKey))) {
+            if (!settings.organizationId().equals(apiClient.accountOrganizationId(apiKey))) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "La nuova chiave deve appartenere allo stesso account Brevo");
             }
-            apiClient.verifyList(apiKey, connection.getListId());
+            apiClient.verifyList(apiKey, settings.listId());
         } catch (BrevoApiClient.BrevoApiException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nuova chiave Brevo non valida");
         }
@@ -108,35 +108,36 @@ public class BrevoConnectionService {
         } catch (BrevoApiClient.BrevoApiException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Impossibile aggiornare il webhook Brevo");
         }
-        long oldWebhookId = connection.getWebhookId();
-        connection.setApiKeyCiphertext(cryptoService.encrypt(apiKey));
-        connection.setWebhookId(newWebhookId);
-        connection.setWebhookSecretHash(sha256(webhookSecret));
+        long oldWebhookId = settings.webhookId();
+        connection.setCredentialsCiphertext(cryptoService.encrypt(apiKey));
+        connection.setConfiguration(new BrevoSettings(settings.listId(), settings.organizationId(),
+                newWebhookId, sha256(webhookSecret)).serialize());
         connectionRepository.saveAndFlush(connection);
         try {
             apiClient.deleteWebhook(apiKey, oldWebhookId);
         } catch (BrevoApiClient.BrevoApiException ignored) {
             // The old webhook can only reach an invalid secret; the new webhook is active.
         }
-        return new Status(true, connection.getListId(), jobRepository.countByOwnerId(owner.getId()));
+        return new Status(true, settings.listId(), jobRepository.countByConnectionOwnerId(owner.getId()));
     }
 
     @Transactional
     public void disconnect(String username) {
         User owner = owner(username);
-        BrevoConnection connection = connectionRepository.findByOwnerId(owner.getId()).orElseThrow(
+        MarketingConnection connection = connectionRepository.findByOwnerId(owner.getId()).orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Brevo non è collegato"));
-        if (jobRepository.countByOwnerId(owner.getId()) > 0) {
+        if (jobRepository.countByConnectionOwnerId(owner.getId()) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Attendi la sincronizzazione dei contatti in sospeso");
         }
-        String apiKey = cryptoService.decrypt(connection.getApiKeyCiphertext());
+        BrevoSettings settings = settings(connection);
+        String apiKey = cryptoService.decrypt(connection.getCredentialsCiphertext());
         try {
             for (var subscriber : marketingRepository.findAllByOwnerIdAndIsActiveTrueAndExpiresAtAfter(
                     owner.getId(), LocalDateTime.now())) {
-                apiClient.removeFromList(apiKey, connection.getListId(),
+                apiClient.removeFromList(apiKey, settings.listId(),
                         cryptoService.decrypt(subscriber.getEmailCiphertext()));
             }
-            apiClient.deleteWebhook(apiKey, connection.getWebhookId());
+            apiClient.deleteWebhook(apiKey, settings.webhookId());
         } catch (BrevoApiClient.BrevoApiException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Impossibile scollegare Brevo in sicurezza");
         }
@@ -145,9 +146,13 @@ public class BrevoConnectionService {
 
     @Transactional
     public void unsubscribeFromBrevo(long ownerId, String secret, JsonNode body) {
-        BrevoConnection connection = connectionRepository.findByOwnerId(ownerId).orElse(null);
-        if (connection == null || secret == null || !MessageDigest.isEqual(
-                connection.getWebhookSecretHash().getBytes(StandardCharsets.US_ASCII),
+        MarketingConnection connection = connectionRepository.findByOwnerId(ownerId).orElse(null);
+        if (connection == null || !BrevoSettings.PROVIDER.equals(connection.getProvider())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        BrevoSettings settings = BrevoSettings.from(connection);
+        if (secret == null || !MessageDigest.isEqual(
+                settings.webhookSecretHash().getBytes(StandardCharsets.US_ASCII),
                 sha256(secret).getBytes(StandardCharsets.US_ASCII))) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
@@ -159,12 +164,19 @@ public class BrevoConnectionService {
         if (!lists.isArray() || lists.isEmpty()) return;
         boolean matchingList = false;
         for (JsonNode list : lists) {
-            if (list.asLong() == connection.getListId()) matchingList = true;
+            if (list.asLong() == settings.listId()) matchingList = true;
         }
         if (!matchingList) return;
         String hash = cryptoService.emailLookupHash(email);
         marketingRepository.deleteAllByOwnerIdAndEmailLookupHash(ownerId, hash);
-        jobRepository.findByOwnerIdAndEmailLookupHash(ownerId, hash).ifPresent(jobRepository::delete);
+        jobRepository.findByConnectionIdAndEmailLookupHash(connection.getId(), hash).ifPresent(jobRepository::delete);
+    }
+
+    private static BrevoSettings settings(MarketingConnection connection) {
+        if (!BrevoSettings.PROVIDER.equals(connection.getProvider())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Il provider collegato non è Brevo");
+        }
+        return BrevoSettings.from(connection);
     }
 
     private User owner(String username) {

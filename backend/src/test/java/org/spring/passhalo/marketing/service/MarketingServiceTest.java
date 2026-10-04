@@ -25,7 +25,7 @@ import static org.mockito.Mockito.anyString;
 class MarketingServiceTest {
     @Mock private MarketingRepository marketingRepository;
     @Mock private PiiCryptoService cryptoService;
-    @Mock private BrevoSyncService brevoSyncService;
+    @Mock private MarketingSyncService marketingSyncService;
     @InjectMocks private MarketingService marketingService;
 
     private User owner() {
@@ -60,7 +60,7 @@ class MarketingServiceTest {
         assertTrue(saved.isActive());
         assertEquals(1L, saved.getOwner().getId());
         assertEquals(10L, saved.getConsentEventId());
-        assertEquals("owner-email-brevo-v1", saved.getConsentVersion());
+        assertEquals("owner-email-marketing-v2", saved.getConsentVersion());
         assertNotNull(saved.getConsentAt());
         assertNotNull(saved.getExpiresAt());
         assertNotNull(saved.getUnsubscribeTokenHash());

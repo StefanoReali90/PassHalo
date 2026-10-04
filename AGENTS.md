@@ -49,6 +49,12 @@
 
 ## 3. Stato dei lavori - Ripartenza sessione successiva (22 settembre 2026)
 
+### Marketing generico (4 ottobre 2026)
+- Modello e coda: `MarketingConnection` / `marketing_connection` e `MarketingSyncJob` / `marketing_sync_job`.
+- CSV per i provider che supportano l'importazione; integrazioni automatiche tramite adapter dedicati. Attualmente e implementato Brevo.
+- Le liste importate da CSV richiedono aggiornamenti manuali anche per revoche e scadenze.
+- Migrazione, compatibilita e flusso: [GENERIC_MARKETING.md](GENERIC_MARKETING.md).
+
 ### Obiettivo architetturale concordato
 - Ogni evento ha un proprietario, mantenuto nella relazione `Event.user`.
 - Il proprietario non deve essere duplicato in `EventMembership`.

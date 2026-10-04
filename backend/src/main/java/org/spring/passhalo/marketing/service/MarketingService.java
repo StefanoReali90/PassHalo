@@ -24,7 +24,7 @@ public class MarketingService {
 
     private final MarketingRepository marketingRepository;
     private final PiiCryptoService cryptoService;
-    private final BrevoSyncService brevoSyncService;
+    private final MarketingSyncService marketingSyncService;
 
     @Value("${app.marketing.retention-months:24}")
     private long retentionMonths = 24;
@@ -42,7 +42,7 @@ public class MarketingService {
         MarketingSubscriber subscriber = subscribers.isEmpty() ? new MarketingSubscriber() : subscribers.getFirst();
         subscriber.setOwner(owner);
         subscriber.setConsentEventId(eventId);
-        subscriber.setConsentVersion("owner-email-brevo-v1");
+        subscriber.setConsentVersion("owner-email-marketing-v2");
         subscriber.setNameCiphertext(cryptoService.encrypt(name));
         subscriber.setSurnameCiphertext(cryptoService.encrypt(surname));
         subscriber.setEmailCiphertext(cryptoService.encrypt(email));
@@ -56,7 +56,7 @@ public class MarketingService {
         subscriber.setUnsubscribeTokenHash(hashToken(unsubscribeToken));
         subscriber.setActive(true);
         marketingRepository.save(subscriber);
-        brevoSyncService.queue(owner, emailLookupHash, subscriber.getEmailCiphertext());
+        marketingSyncService.queue(owner, emailLookupHash, subscriber.getEmailCiphertext());
         return unsubscribeToken;
     }
 
@@ -67,7 +67,7 @@ public class MarketingService {
             if (subscriber.getOwner() == null) {
                 marketingRepository.deleteAllByOwnerIsNullAndEmailLookupHash(subscriber.getEmailLookupHash());
             } else {
-                brevoSyncService.queue(subscriber.getOwner(), subscriber.getEmailLookupHash(),
+                marketingSyncService.queue(subscriber.getOwner(), subscriber.getEmailLookupHash(),
                         subscriber.getEmailCiphertext());
                 marketingRepository.deleteAllByOwnerIdAndEmailLookupHash(
                         subscriber.getOwner().getId(), subscriber.getEmailLookupHash());
