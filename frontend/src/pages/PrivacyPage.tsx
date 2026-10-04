@@ -56,7 +56,7 @@ export function PrivacyPage() {
                     <div>
                         <h2>Comunicazioni promozionali</h2>
                         <p>L’invio di aggiornamenti su eventi futuri è separato dalla prenotazione, facoltativo e basato sulla scelta espressa nell’apposita casella. Non selezionarla non impedisce di ottenere il pass.</p>
-                        <p>Se acconsenti, nome, cognome ed email vengono conservati separatamente dalla prenotazione per ricevere via email comunicazioni sui futuri eventi dello stesso organizzatore, anche dopo la chiusura dell’evento, per un massimo di {marketingRetentionMonths} mesi dal consenso. Se l’organizzatore collega il proprio account Brevo, questi dati vengono trasmessi a Brevo per gestire le campagne email. Puoi revocare il consenso usando il link nell’email di conferma o il link di disiscrizione nelle campagne.</p>
+                        <p>Se acconsenti, nome, cognome ed email vengono conservati separatamente dalla prenotazione per ricevere via email comunicazioni sui futuri eventi dello stesso organizzatore, anche dopo la chiusura dell’evento, per un massimo di {marketingRetentionMonths} mesi dal consenso. L’organizzatore può esportare i contatti e importarli nel servizio scelto per le campagne email. Se attiva l’integrazione automatica con Brevo, questi dati vengono trasmessi a Brevo. Puoi revocare il consenso usando il link nell’email di conferma o il link di disiscrizione nelle campagne.</p>
                     </div>
                 </section>
 
@@ -66,7 +66,7 @@ export function PrivacyPage() {
                         <h2>Accesso e conservazione</h2>
                         <p>I dati sono accessibili agli amministratori autorizzati. Lo staff addetto all’ingresso può soltanto verificare il QR code e ricevere l’esito del controllo.</p>
                         <p>Alla chiusura dell’evento il QR viene invalidato e i dati identificativi della prenotazione — nome, cognome, email e telefono — vengono rimossi. La registrazione conserva dati come stato, data e riferimento all’evento: la rimozione degli identificativi diretti non garantisce, da sola, l’anonimizzazione completa.</p>
-                        <p>Alla revoca, il contatto viene rimosso dall’elenco marketing di PassHalo. Se è collegato Brevo, un’email cifrata resta nella coda tecnica finché la rimozione dalla lista non riesce; il titolare può verificare le operazioni in attesa. I dati di prenotazione seguono tempi e finalità distinti: per richiederne l’accesso o la cancellazione, contatta il titolare indicato sopra. Possono restare dati strettamente necessari per obblighi di legge o per tutelare diritti.</p>
+                        <p>Alla revoca, il contatto viene rimosso dall’elenco marketing di PassHalo e dalle esportazioni successive. Con un’integrazione automatica, un’email cifrata resta nella coda tecnica finché la rimozione dalla lista non riesce. Se l’organizzatore ha importato un CSV, deve aggiornare anche la lista nel servizio usato per le campagne: i file già scaricati non si aggiornano automaticamente. I dati di prenotazione seguono tempi e finalità distinti: per richiederne l’accesso o la cancellazione, contatta il titolare indicato sopra. Possono restare dati strettamente necessari per obblighi di legge o per tutelare diritti.</p>
                     </div>
                 </section>
 

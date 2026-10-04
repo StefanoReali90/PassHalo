@@ -2,11 +2,11 @@ package org.spring.passhalo.marketing.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.spring.passhalo.marketing.entity.BrevoConnection;
-import org.spring.passhalo.marketing.entity.BrevoSyncJob;
+import org.spring.passhalo.marketing.entity.MarketingConnection;
+import org.spring.passhalo.marketing.entity.MarketingSyncJob;
 import org.spring.passhalo.marketing.entity.MarketingSubscriber;
-import org.spring.passhalo.marketing.repository.BrevoConnectionRepository;
-import org.spring.passhalo.marketing.repository.BrevoSyncJobRepository;
+import org.spring.passhalo.marketing.repository.MarketingConnectionRepository;
+import org.spring.passhalo.marketing.repository.MarketingSyncJobRepository;
 import org.spring.passhalo.marketing.repository.MarketingRepository;
 import org.spring.passhalo.security.PiiCryptoService;
 import org.spring.passhalo.user.entity.User;
@@ -22,20 +22,21 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class BrevoSyncService {
-    private final BrevoSyncJobRepository jobRepository;
-    private final BrevoConnectionRepository connectionRepository;
+public class MarketingSyncService {
+    private final MarketingSyncJobRepository jobRepository;
+    private final MarketingConnectionRepository connectionRepository;
     private final MarketingRepository marketingRepository;
     private final PiiCryptoService cryptoService;
-    private final BrevoApiClient apiClient;
+    private final List<MarketingProviderAdapter> adapters;
     private final TransactionTemplate transactions;
 
     @Transactional
     public void queue(User owner, String emailLookupHash, String emailCiphertext) {
-        if (!connectionRepository.findByOwnerId(owner.getId()).isPresent()) return;
-        BrevoSyncJob job = jobRepository.findByOwnerIdAndEmailLookupHash(owner.getId(), emailLookupHash)
-                .orElseGet(BrevoSyncJob::new);
-        job.setOwner(owner);
+        MarketingConnection connection = connectionRepository.findByOwnerId(owner.getId()).orElse(null);
+        if (connection == null) return;
+        MarketingSyncJob job = jobRepository.findByConnectionIdAndEmailLookupHash(connection.getId(), emailLookupHash)
+                .orElseGet(MarketingSyncJob::new);
+        job.setConnection(connection);
         job.setEmailLookupHash(emailLookupHash);
         job.setEmailCiphertext(emailCiphertext);
         job.setUpdatedAt(LocalDateTime.now());
@@ -52,17 +53,20 @@ public class BrevoSyncService {
     @Scheduled(fixedDelay = 60_000)
     public void flushPending() {
         List<Long> ids = transactions.execute(status -> jobRepository.findReady(PageRequest.of(0, 20))
-                .stream().map(BrevoSyncJob::getId).toList());
+                .stream().map(MarketingSyncJob::getId).toList());
         if (ids == null) return;
         for (Long id : ids) {
             try {
                 Pending pending = transactions.execute(status -> snapshot(id));
                 if (pending == null) continue;
+                MarketingProviderAdapter adapter = adapters.stream()
+                        .filter(candidate -> candidate.provider().equals(pending.connection().getProvider()))
+                        .findFirst().orElseThrow(() -> new IllegalStateException("Marketing provider not supported"));
                 if (pending.subscriber() == null) {
-                    apiClient.removeFromList(pending.apiKey(), pending.listId(), pending.email());
+                    adapter.removeContact(pending.connection(), pending.email());
                 } else {
                     MarketingSubscriber subscriber = pending.subscriber();
-                    apiClient.upsertContact(pending.apiKey(), pending.listId(), pending.email(),
+                    adapter.upsertContact(pending.connection(), pending.email(),
                             cryptoService.decrypt(subscriber.getNameCiphertext()),
                             cryptoService.decrypt(subscriber.getSurnameCiphertext()));
                 }
@@ -71,7 +75,7 @@ public class BrevoSyncService {
                 }));
             } catch (RuntimeException exception) {
                 // No contact, key, or response body is included in logs.
-                log.warn("Sincronizzazione Brevo fallita jobId={} errore={}", id, exception.getClass().getSimpleName());
+                log.warn("Sincronizzazione marketing fallita jobId={} errore={}", id, exception.getClass().getSimpleName());
                 transactions.executeWithoutResult(status -> jobRepository.findById(id).ifPresent(job -> {
                     job.setUpdatedAt(LocalDateTime.now());
                     jobRepository.save(job);
@@ -81,17 +85,17 @@ public class BrevoSyncService {
     }
 
     private Pending snapshot(Long id) {
-        BrevoSyncJob job = jobRepository.findById(id).orElse(null);
+        MarketingSyncJob job = jobRepository.findById(id).orElse(null);
         if (job == null) return null;
-        BrevoConnection connection = connectionRepository.findByOwnerId(job.getOwner().getId()).orElse(null);
-        if (connection == null) return null;
+        MarketingConnection connection = job.getConnection();
+        // Initialize the detached snapshot before leaving the transaction.
+        connection.getProvider();
         MarketingSubscriber subscriber = marketingRepository
-                .findAllByOwnerIdAndEmailLookupHash(job.getOwner().getId(), job.getEmailLookupHash())
+                .findAllByOwnerIdAndEmailLookupHash(connection.getOwner().getId(), job.getEmailLookupHash())
                 .stream().filter(row -> row.isActive() && row.getExpiresAt() != null
                         && row.getExpiresAt().isAfter(LocalDateTime.now())).findFirst().orElse(null);
-        return new Pending(job.getRevision(), cryptoService.decrypt(connection.getApiKeyCiphertext()),
-                connection.getListId(), cryptoService.decrypt(job.getEmailCiphertext()), subscriber);
+        return new Pending(job.getRevision(), connection, cryptoService.decrypt(job.getEmailCiphertext()), subscriber);
     }
 
-    private record Pending(long revision, String apiKey, long listId, String email, MarketingSubscriber subscriber) { }
+    private record Pending(long revision, MarketingConnection connection, String email, MarketingSubscriber subscriber) { }
 }

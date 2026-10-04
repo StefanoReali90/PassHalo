@@ -8,9 +8,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.spring.passhalo.marketing.entity.BrevoConnection;
-import org.spring.passhalo.marketing.repository.BrevoConnectionRepository;
-import org.spring.passhalo.marketing.repository.BrevoSyncJobRepository;
+import org.spring.passhalo.marketing.entity.MarketingConnection;
+import org.spring.passhalo.marketing.repository.MarketingConnectionRepository;
+import org.spring.passhalo.marketing.repository.MarketingSyncJobRepository;
 import org.spring.passhalo.marketing.repository.MarketingRepository;
 import org.spring.passhalo.security.PiiCryptoService;
 import org.spring.passhalo.user.entity.User;
@@ -27,13 +27,13 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class BrevoConnectionServiceTest {
-    @Mock private BrevoConnectionRepository connectionRepository;
-    @Mock private BrevoSyncJobRepository jobRepository;
+    @Mock private MarketingConnectionRepository connectionRepository;
+    @Mock private MarketingSyncJobRepository jobRepository;
     @Mock private MarketingRepository marketingRepository;
     @Mock private UserRepository userRepository;
     @Mock private PiiCryptoService cryptoService;
     @Mock private BrevoApiClient apiClient;
-    @Mock private BrevoSyncService syncService;
+    @Mock private MarketingSyncService syncService;
     @InjectMocks private BrevoConnectionService service;
 
     @BeforeEach
@@ -55,13 +55,13 @@ class BrevoConnectionServiceTest {
 
         assertTrue(status.connected());
         assertEquals(42L, status.listId());
-        var captor = ArgumentCaptor.forClass(BrevoConnection.class);
+        var captor = ArgumentCaptor.forClass(MarketingConnection.class);
         verify(connectionRepository).saveAndFlush(captor.capture());
         assertEquals(1L, captor.getValue().getOwner().getId());
-        assertEquals("encrypted-key", captor.getValue().getApiKeyCiphertext());
-        assertEquals("organization-1", captor.getValue().getOrganizationId());
-        assertNotEquals("secret-key", captor.getValue().getApiKeyCiphertext());
-        assertEquals(64, captor.getValue().getWebhookSecretHash().length());
+        assertEquals("encrypted-key", captor.getValue().getCredentialsCiphertext());
+        assertEquals("organization-1", BrevoSettings.from(captor.getValue()).organizationId());
+        assertNotEquals("secret-key", captor.getValue().getCredentialsCiphertext());
+        assertEquals(64, BrevoSettings.from(captor.getValue()).webhookSecretHash().length());
         verify(syncService).queueAllActive(owner);
         verify(apiClient).verifyList("secret-key", 42L);
     }
@@ -75,11 +75,12 @@ class BrevoConnectionServiceTest {
         when(apiClient.createWebhook(anyString(), anyString(), anyString())).thenReturn(77L);
         when(cryptoService.encrypt(anyString())).thenReturn("encrypted-key");
         service.connect(owner.getEmail(), "secret-key", 42L);
-        var connectionCaptor = ArgumentCaptor.forClass(BrevoConnection.class);
+        var connectionCaptor = ArgumentCaptor.forClass(MarketingConnection.class);
         var secretCaptor = ArgumentCaptor.forClass(String.class);
         verify(connectionRepository).saveAndFlush(connectionCaptor.capture());
         verify(apiClient).createWebhook(anyString(), anyString(), secretCaptor.capture());
         when(connectionRepository.findByOwnerId(1L)).thenReturn(Optional.of(connectionCaptor.getValue()));
+        connectionCaptor.getValue().setId(10L);
         when(cryptoService.emailLookupHash("shared@example.test")).thenReturn("v1:hash");
         var payload = new ObjectMapper().readTree("{\"event\":\"unsubscribe\",\"email\":\"shared@example.test\",\"list_id\":[42]}");
 
@@ -98,23 +99,22 @@ class BrevoConnectionServiceTest {
     @Test
     void rotatesExpiredKeyWithoutDroppingPendingContacts() {
         User owner = owner(1L, "valerio@example.test");
-        BrevoConnection connection = new BrevoConnection();
+        MarketingConnection connection = new MarketingConnection();
         connection.setOwner(owner);
-        connection.setOrganizationId("organization-1");
-        connection.setListId(42L);
-        connection.setWebhookId(77L);
+        connection.setProvider(BrevoSettings.PROVIDER);
+        connection.setConfiguration(new BrevoSettings(42L, "organization-1", 77L, "a".repeat(64)).serialize());
         when(userRepository.findByEmailIgnoreCase(owner.getEmail())).thenReturn(Optional.of(owner));
         when(connectionRepository.findByOwnerId(1L)).thenReturn(Optional.of(connection));
         when(apiClient.accountOrganizationId("new-key")).thenReturn("organization-1");
         when(apiClient.createWebhook(eq("new-key"), anyString(), anyString())).thenReturn(88L);
         when(cryptoService.encrypt("new-key")).thenReturn("new-encrypted-key");
-        when(jobRepository.countByOwnerId(1L)).thenReturn(3L);
+        when(jobRepository.countByConnectionOwnerId(1L)).thenReturn(3L);
 
         var status = service.rotateKey(owner.getEmail(), "new-key");
 
         assertEquals(3L, status.pendingContacts());
-        assertEquals("new-encrypted-key", connection.getApiKeyCiphertext());
-        assertEquals(88L, connection.getWebhookId());
+        assertEquals("new-encrypted-key", connection.getCredentialsCiphertext());
+        assertEquals(88L, BrevoSettings.from(connection).webhookId());
         verify(apiClient).verifyList("new-key", 42L);
         verify(apiClient).deleteWebhook("new-key", 77L);
         verifyNoInteractions(syncService);
@@ -123,8 +123,9 @@ class BrevoConnectionServiceTest {
     @Test
     void refusesAKeyForADifferentBrevoOrganization() {
         User owner = owner(1L, "valerio@example.test");
-        BrevoConnection connection = new BrevoConnection();
-        connection.setOrganizationId("organization-1");
+        MarketingConnection connection = new MarketingConnection();
+        connection.setProvider(BrevoSettings.PROVIDER);
+        connection.setConfiguration(new BrevoSettings(42L, "organization-1", 77L, "a".repeat(64)).serialize());
         when(userRepository.findByEmailIgnoreCase(owner.getEmail())).thenReturn(Optional.of(owner));
         when(connectionRepository.findByOwnerId(1L)).thenReturn(Optional.of(connection));
         when(apiClient.accountOrganizationId("other-key")).thenReturn("organization-2");
