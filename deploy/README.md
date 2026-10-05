@@ -310,7 +310,7 @@ Il primo comando deve mostrare l'IPv4 del VPS; il secondo deve rispondere senza 
 4. Scansione del QR da telefono; una seconda scansione dello stesso QR deve dare esito già convalidato.
 5. Eventuali funzioni staff e inviti con un account separato.
 
-Non distribuire l'APK agli amici prima di questi controlli. Il rollback automatico del deploy ripristina JAR e frontend precedenti se l'API non risponde a `/events`; **non** ripristina il database.
+Non distribuire l'APK agli amici prima di questi controlli. Il rollback automatico del deploy ripristina JAR e frontend precedenti se il backend non risponde ai controlli su `/v3/api-docs` e `/events`; **non** ripristina il database.
 
 ## 11. Leggere log e risolvere i problemi più comuni
 
